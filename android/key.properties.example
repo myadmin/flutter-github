@@ -1,0 +1,13 @@
+# Android 正式签名配置示例：复制为 android/key.properties 后填入实际签名信息。
+# android/.gitignore 已忽略 key.properties、*.jks 与 *.keystore，切勿提交到仓库。
+#
+# 生成 upload-keystore.jks 示例命令（生成后请妥善备份，丢失将无法覆盖升级）：
+#   keytool -genkey -v -keystore upload-keystore.jks -storetype JKS \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# 将 upload-keystore.jks 放在 android/app/ 目录下；storeFile 相对 android/app 解析，
+# 因此下方只写文件名。未配置 key.properties 时构建会自动回退为 debug 签名。
+storePassword=换成你的密钥库口令
+keyPassword=换成你的密钥口令
+keyAlias=upload
+storeFile=upload-keystore.jks

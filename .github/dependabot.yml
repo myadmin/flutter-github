@@ -1,0 +1,44 @@
+version: 2
+
+# 依赖与 GitHub Actions 版本每周自动检查更新：
+# - 仅针对 minor / patch 或 Action 版本提 PR，不自动合入
+# - Flutter SDK 版本由各 workflow 中的 flutter-version 统一固定，升级需连同代码迁移一起处理
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
+
+  - package-ecosystem: "pub"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+    labels:
+      - "dependencies"
+      - "dart"
+    groups:
+      pub-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"

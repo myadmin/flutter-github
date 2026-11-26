@@ -1,0 +1,74 @@
+# Flutter 项目 CI 门禁工作流（参考 hm_shop dart.yml）：
+# 在 push / pull_request 到 master 时执行格式化校验、严格静态分析、单测覆盖率门禁与 Web 冒烟构建。
+
+name: Flutter CI
+
+on:
+  push:
+    branches: [ "master" ]
+    # 纯文档与基础 Git 配置调整不重复触发流水线
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - ".gitattributes"
+      - ".editorconfig"
+  pull_request:
+    branches: [ "master" ]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - ".gitattributes"
+      - ".editorconfig"
+
+# 同一分支连续推送时取消排队或未完成的旧检查，节省 Runner 时长
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Format, Analyze & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # 固定 Flutter 3.47.9，避免跟随 stable 漂移引发非预期分析告警或构建差异
+          flutter-version: '3.47.9'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze project source
+        # 将 info 级别告警也视为失败，维持零静态分析问题
+        run: flutter analyze --fatal-infos
+
+      - name: Run tests with coverage
+        run: flutter test --coverage
+
+      - name: Check coverage threshold
+        # 本地实测基线（Flutter 3.47.9，37 个测试用例）：3269 / 3877 行 = 84.3%
+        # 设定 80% 下限，避免后续改动导致核心逻辑失测
+        run: |
+          covered=$(awk -F'[:,]' '/^DA:/ && $3+0 > 0 { c++ } END { print c+0 }' coverage/lcov.info)
+          total=$(awk -F'[:,]' '/^DA:/ { t++ } END { print t+0 }' coverage/lcov.info)
+          echo "覆盖 ${covered} / ${total} 行"
+          pct=$(awk -v c="$covered" -v t="$total" 'BEGIN { printf "%.1f", (t > 0 ? c * 100 / t : 0) }')
+          echo "覆盖率 ${pct}%"
+          awk -v p="$pct" 'BEGIN { if (p + 0 < 80) { print "覆盖率低于 80%，请补充测试"; exit 1 } }'
+
+      - name: Build web (smoke)
+        # 检查 Web 端条件导入与资源编译，弥补 analyze / test 盲区
+        run: flutter build web --release --no-wasm-dry-run

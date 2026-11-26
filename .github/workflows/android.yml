@@ -1,0 +1,225 @@
+# Android 打包与发版工作流（参考 hm_shop mobile.yml）：
+# - push 到 master、打 v* 标签或手动触发时构建 Release APK（按 ABI 拆分）与 AAB
+# - 产物统一上传至 Actions Artifacts；打 v* 标签或手动触发勾选 publish_release 时自动创建 GitHub Release
+#
+# 可选 Secrets（未配置时自动降级为 debug 签名，仍可直接安装试用）：
+#   ANDROID_KEYSTORE_BASE64  release keystore 的 base64 字符串（`base64 -w0 upload-keystore.jks`）
+#   ANDROID_STORE_PASSWORD   密钥库口令
+#   ANDROID_KEY_PASSWORD     密钥口令
+#   ANDROID_KEY_ALIAS        密钥别名（默认 upload）
+
+name: Build Android
+
+on:
+  push:
+    branches: [ "master" ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "构建完成后将 APK / AAB 发布到 GitHub Releases"
+        type: boolean
+        default: true
+      release_tag:
+        description: "发布使用的 tag（留空默认 v<versionName>-build.<run_number>）"
+        type: string
+        required: false
+
+# 同一分支连续推送时取消排队中的旧构建，节省 CI 资源
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-android:
+    name: Android APK / AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # GitHub 表达式不允许在 step if 里直接引用 secrets，转存到 job 级环境变量
+      HAS_ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        # AGP 9.1.0 / Kotlin 2.4 要求 JDK 17，显式固定 Runner Java 版本
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Decode release keystore
+        # 配置了 ANDROID_KEYSTORE_BASE64 时写出签名文件与 key.properties；缺失则自动回退 debug 签名
+        if: env.HAS_ANDROID_KEYSTORE == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || 'upload' }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          {
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyPassword=$KEY_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "storeFile=upload-keystore.jks"
+          } > android/key.properties
+          echo "::notice::已写入 android/key.properties，本次使用 release 正式签名"
+
+      - name: Report signing config
+        run: |
+          if [ -f android/key.properties ]; then
+            echo "::notice::签名模式：release（正式签名，可用于商店分发）"
+          else
+            echo "::notice::签名模式：debug（可直接装机试用；配置 ANDROID_KEYSTORE_BASE64 后切换为正式签名）"
+          fi
+
+      - name: Build release APKs (split per ABI)
+        # 分别打出 arm64-v8a / armeabi-v7a / x86_64 APK，单包体积更小
+        run: flutter build apk --release --split-per-abi
+
+      - name: Build release App Bundle
+        # Google Play 等商店分发使用的 AAB 格式
+        run: flutter build appbundle --release
+
+      - name: Verify APK signature
+        # 输出实际签名证书指纹，防止正式签名配置漏生效
+        run: |
+          set -euo pipefail
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort | tail -1)
+          "$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | head -3
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gh-explorer-android
+          path: |
+            build/app/outputs/flutter-apk/*.apk
+            build/app/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [ build-android ]
+    # 仅打 v* 标签或手动触发勾选 publish_release 时创建 Release；普通 push 到 master 只产 Artifact
+    if: |
+      needs.build-android.result == 'success' &&
+      (startsWith(github.ref, 'refs/tags/') || inputs.publish_release == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      HAS_ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: gh-explorer-android
+          path: dist
+
+      - name: Resolve release tag
+        env:
+          INPUT_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          APP_VERSION=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -1 | tr -d '\r')
+          APP_VERSION_NAME="${APP_VERSION%%+*}"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "APP_VERSION_NAME=$APP_VERSION_NAME" >> "$GITHUB_ENV"
+          TAG="${INPUT_TAG:-}"
+          if [ -z "$TAG" ]; then
+            if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+              TAG="${GITHUB_REF#refs/tags/}"
+            else
+              TAG="v${APP_VERSION_NAME}-build.${GITHUB_RUN_NUMBER}"
+            fi
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" > /dev/null 2>&1; then
+            echo "TAG_EXISTS=true" >> "$GITHUB_ENV"
+          else
+            echo "TAG_EXISTS=false" >> "$GITHUB_ENV"
+          fi
+          echo "::notice::发布 Tag：${TAG}"
+
+      - name: Compose release notes
+        run: |
+          set -euo pipefail
+          ANDROID_SIGNING="debug 签名（可直接装机试用；配置 ANDROID_KEYSTORE_BASE64 等 Secrets 后切换正式签名）"
+          if [ "${HAS_ANDROID_KEYSTORE:-false}" = "true" ]; then
+            ANDROID_SIGNING="release 正式签名"
+          fi
+
+          cat <<NOTES > release-notes.md
+          ## Android 安装包
+
+          | 文件 | 适用设备 |
+          | --- | --- |
+          | \`app-arm64-v8a-release.apk\` | 绝大多数现代 64 位 Android 手机（推荐） |
+          | \`app-armeabi-v7a-release.apk\` | 较老的 32 位 Android 设备 |
+          | \`app-x86_64-release.apk\` | x86_64 Android 模拟器或平板 |
+          | \`app-release.aab\` | Google Play 应用商店分发包 |
+
+          - **签名状态**：${ANDROID_SIGNING}
+          - **应用版本号**：\`${APP_VERSION}\`（来自 \`pubspec.yaml\`）
+
+          ## 安装说明
+
+          1. 下载对应架构的 \`.apk\` 文件（现代手机优先选择 \`arm64-v8a\`）；
+          2. 首次安装需在系统设置中允许「安装未知来源应用」。
+          NOTES
+
+      - name: Upload assets to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eo pipefail
+          mapfile -t FILES < <(find dist -type f \( -name '*.apk' -o -name '*.aab' \) | sort)
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "::error::未找到任何 .apk 或 .aab 产物"
+            find dist -type f | head -20
+            exit 1
+          fi
+          printf '待上传资产：\n'
+          printf '  %s\n' "${FILES[@]}"
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release ${TAG} 已存在，覆盖更新安装包资产"
+            OUT=$(gh release upload "$TAG" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY" 2>&1) || {
+              echo "::error::gh release upload 失败：$(echo "$OUT" | tr '\n' ' ' | cut -c1-800)"
+              exit 1
+            }
+          else
+            TARGET_ARGS=()
+            if [ "$TAG_EXISTS" != "true" ]; then
+              TARGET_ARGS=(--target "$GITHUB_SHA")
+            fi
+            OUT=$(gh release create "$TAG" "${FILES[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "gh_explorer ${TAG}" \
+              --notes-file release-notes.md \
+              "${TARGET_ARGS[@]}" 2>&1) || {
+              echo "::error::gh release create 失败：$(echo "$OUT" | tr '\n' ' ' | cut -c1-800)"
+              exit 1
+            }
+          fi
+          echo "::notice::Android 安装包已发布：https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"

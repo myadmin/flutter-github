@@ -1,0 +1,115 @@
+# Web 打包与部署工作流（参考 hm_shop web.yml）：
+# - push 到 master、PR 到 master 或手动触发时构建 Web Release 产物并上传 Artifact
+# - push 到 master 或手动触发（位于 master 分支）时自动部署到 GitHub Pages
+#
+# GitHub Pages 启用前提：
+#   仓库 Settings -> Pages -> Build and deployment -> Source 选择 "GitHub Actions"
+#   （若暂未开启 Pages，build-web 仍可正常构建并产出可供下载的 gh-explorer-web 压缩包）
+
+name: Build and Deploy Web
+
+on:
+  push:
+    branches: [ "master" ]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - ".gitattributes"
+      - ".editorconfig"
+  pull_request:
+    branches: [ "master" ]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - ".gitattributes"
+      - ".editorconfig"
+  workflow_dispatch:
+    inputs:
+      base_href:
+        description: "自定义 base-href（留空默认使用 /<仓库名>/，根目录托管可填 /）"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 按分支 ref 分组排队，避免多 PR 并发时互相取消
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-web:
+    name: Build Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build web
+        env:
+          INPUT_BASE_HREF: ${{ inputs.base_href }}
+        run: |
+          set -euo pipefail
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          BASE_HREF="${INPUT_BASE_HREF:-/${REPO_NAME}/}"
+          echo "::notice::构建 Web base-href=${BASE_HREF}"
+          flutter build web --release --base-href "${BASE_HREF}" --no-wasm-dry-run
+
+      - name: Strip engine symbol files
+        # 清理调试用 *.symbols 文件减小静态托管体积，不影响生产运行
+        run: |
+          find build/web -name '*.symbols' -print -delete
+          du -sh build/web
+
+      - name: Add SPA fallback for deep links
+        # 启用了 usePathUrlStrategy 真实路径策略，复制 404.html 以支撑 GitHub Pages 深链直达与刷新恢复
+        run: cp build/web/index.html build/web/404.html
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gh-explorer-web
+          path: build/web
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    # 仅 master 分支 push 或手动触发时发布到 GitHub Pages
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    needs: build-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
