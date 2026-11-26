@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gh_explorer/models/footprint.dart';
 import 'package:gh_explorer/models/repo.dart';
@@ -131,4 +133,114 @@ void main() {
     expect(ctrl.isEmpty, isTrue);
     ctrl.dispose();
   });
+
+  test('PagedListController 刷新期间拒绝 loadMore，避免旧页与新查询混排', () async {
+    final firstPage = Completer<void>();
+    final requestedPages = <int>[];
+    final ctrl = PagedListController<int>(
+      pageSize: 2,
+      loader: (page) async {
+        requestedPages.add(page);
+        if (page == 1) await firstPage.future;
+        return PageResult<int>(
+          items: page == 1 ? [1, 2] : [3],
+          page: page,
+          hasMore: page == 1,
+        );
+      },
+    );
+
+    final refreshFuture = ctrl.refresh();
+    await Future<void>.delayed(Duration.zero);
+    // 刷新进行中（列表尚未就绪）时 loadMore 应直接返回
+    await ctrl.loadMore();
+    expect(requestedPages, [1]);
+
+    firstPage.complete();
+    await refreshFuture;
+    expect(ctrl.items, [1, 2]);
+    ctrl.dispose();
+  });
+
+  test('PagedListController clear 与并发 refresh 会作废旧响应', () async {
+    final slow = Completer<void>();
+    var calls = 0;
+    final ctrl = PagedListController<int>(
+      pageSize: 2,
+      loader: (page) async {
+        calls++;
+        if (calls == 1) {
+          await slow.future;
+          return const PageResult<int>(items: [1, 2], page: 1, hasMore: true);
+        }
+        return const PageResult<int>(items: [3, 4], page: 1, hasMore: true);
+      },
+    );
+
+    final stale = ctrl.refresh();
+    await Future<void>.delayed(Duration.zero);
+    ctrl.clear();
+    slow.complete();
+    await stale;
+    expect(ctrl.items, isEmpty, reason: 'clear 之后旧响应不得回填');
+
+    // 新请求先返回，旧请求后完成时不得覆盖新结果
+    final slowAgain = Completer<void>();
+    var calls2 = 0;
+    final ctrl2 = PagedListController<int>(
+      pageSize: 2,
+      loader: (page) async {
+        calls2++;
+        if (calls2 == 1) {
+          await slowAgain.future;
+          return const PageResult<int>(items: [1, 2], page: 1, hasMore: true);
+        }
+        return const PageResult<int>(items: [3, 4], page: 1, hasMore: true);
+      },
+    );
+    final oldRefresh = ctrl2.refresh();
+    await Future<void>.delayed(Duration.zero);
+    final newRefresh = ctrl2.refresh();
+    await newRefresh;
+    slowAgain.complete();
+    await oldRefresh;
+    expect(ctrl2.items, [3, 4]);
+    ctrl.dispose();
+    ctrl2.dispose();
+  });
+
+  test('TokenManager 将历史明文令牌迁移到安全存储并清除明文', () async {
+    SharedPreferences.setMockInitialValues({
+      'gh_explorer_token': 'ghp_legacy',
+      'gh_explorer_token_scopes': <String>['repo', 'read:user'],
+    });
+    final store = _MemorySecretStore();
+    final manager = TokenManager(secretStore: store);
+
+    await manager.init();
+    expect(manager.getToken(), 'ghp_legacy');
+    expect(manager.getScopes(), ['repo', 'read:user']);
+    expect(store.data['gh_explorer_token'], 'ghp_legacy');
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('gh_explorer_token'), isNull);
+    expect(prefs.getStringList('gh_explorer_token_scopes'), isNull);
+
+    await manager.removeToken();
+    expect(manager.hasToken, isFalse);
+    expect(store.data.containsKey('gh_explorer_token'), isFalse);
+  });
+}
+
+class _MemorySecretStore implements SecretStore {
+  final Map<String, String> data = <String, String>{};
+
+  @override
+  Future<String?> read(String key) async => data[key];
+
+  @override
+  Future<void> write(String key, String value) async => data[key] = value;
+
+  @override
+  Future<void> delete(String key) async => data.remove(key);
 }

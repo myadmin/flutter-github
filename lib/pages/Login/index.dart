@@ -13,7 +13,7 @@ import 'package:gh_explorer/stores/user_controller.dart';
 import 'package:gh_explorer/utils/api_exception.dart';
 import 'package:gh_explorer/utils/loading_dialog.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:gh_explorer/utils/external_link.dart';
 
 /// GitHub 登录页
 ///
@@ -77,8 +77,7 @@ class _LoginPageState extends State<LoginPage> {
 
   /// 唤起外部浏览器打开 GitHub 新建 Token 页面（已预选常用只读与 Star 权限）
   Future<void> _openCreatePatPage() async {
-    final uri = Uri.parse(HttpConstants.createPatUrl);
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final opened = await openExternalUrl(HttpConstants.createPatUrl);
     if (!opened && mounted) {
       ToastUtils.showToast(context, '无法打开 GitHub 页面，请手动访问');
     }
@@ -214,8 +213,7 @@ class _LoginPageState extends State<LoginPage> {
     await Clipboard.setData(ClipboardData(text: code.userCode));
     if (!mounted) return;
     ToastUtils.showToast(context, '已复制授权码 ${code.userCode}，正在前往 GitHub...');
-    final uri = Uri.parse(code.verificationUri);
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    await openExternalUrl(code.verificationUri);
   }
 
   /// 构造 PAT 输入框样式（含粘贴与明文显隐按钮）
@@ -226,9 +224,9 @@ class _LoginPageState extends State<LoginPage> {
     );
     return InputDecoration(
       hintText: '粘贴 GitHub Token（ghp_... / github_pat_...）',
-      hintStyle: AppTextStyles.caption.copyWith(fontSize: 13),
+      hintStyle: context.captionStyle.copyWith(fontSize: 13),
       filled: true,
-      fillColor: AppColors.inputFill,
+      fillColor: context.appColors.inputFill,
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
       border: border,
       enabledBorder: border,
@@ -261,12 +259,12 @@ class _LoginPageState extends State<LoginPage> {
     final activeDevice = _deviceCode;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.appColors.cardBackground,
       appBar: AppBar(
         title: const Text('登录 GitHub'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.cardBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
       ),
       body: Center(
@@ -285,28 +283,28 @@ class _LoginPageState extends State<LoginPage> {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: AppColors.brandDark,
+                          color: context.appColors.brandButtonBg,
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.code,
-                          color: Colors.white,
+                          color: context.appColors.brandButtonFg,
                           size: 28,
                         ),
                       ),
                       const SizedBox(width: 14),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               '连接你的 GitHub 账号',
-                              style: AppTextStyles.pageTitle,
+                              style: context.pageTitleStyle,
                             ),
-                            SizedBox(height: 4),
+                            const SizedBox(height: 4),
                             Text(
                               '登录后解锁点 Star、查看动态、私有仓库及 5000 次/小时 API 配额',
-                              style: AppTextStyles.caption,
+                              style: context.captionStyle,
                             ),
                           ],
                         ),
@@ -314,9 +312,9 @@ class _LoginPageState extends State<LoginPage> {
                     ],
                   ),
                   const SizedBox(height: 24),
-                  const Text(
+                  Text(
                     'Personal Access Token 登录',
-                    style: AppTextStyles.bodyStrong,
+                    style: context.bodyStrongStyle,
                   ),
                   const SizedBox(height: 10),
                   TextFormField(
@@ -343,8 +341,8 @@ class _LoginPageState extends State<LoginPage> {
                     child: ElevatedButton(
                       onPressed: _submitTokenLogin,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.brandDark,
-                        foregroundColor: Colors.white,
+                        backgroundColor: context.appColors.brandButtonBg,
+                        foregroundColor: context.appColors.brandButtonFg,
                         elevation: 0,
                         shape: const StadiumBorder(),
                       ),
@@ -374,12 +372,12 @@ class _LoginPageState extends State<LoginPage> {
                     ],
                   ),
                   if (_showPatGuide) _buildPatGuideCard(),
-                  const Divider(height: 32, color: AppColors.divider),
+                  Divider(height: 32, color: context.appColors.divider),
                   _buildDeviceFlowSection(activeDevice),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     '说明：令牌仅保存在本机缓存用于直接请求 api.github.com，不会上传至任何第三方服务器。',
-                    style: AppTextStyles.captionSmall,
+                    style: context.captionSmallStyle,
                   ),
                 ],
               ),
@@ -396,20 +394,20 @@ class _LoginPageState extends State<LoginPage> {
       margin: const EdgeInsets.only(top: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.pageBackground,
+        color: context.appColors.pageBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appColors.divider),
       ),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('获取 Classic Token 步骤：', style: AppTextStyles.bodyStrong),
-          SizedBox(height: 6),
+          Text('获取 Classic Token 步骤：', style: context.bodyStrongStyle),
+          const SizedBox(height: 6),
           Text(
             '1. 点击上方「前往 GitHub 生成 Token」（已自动勾选推荐权限）；\n'
             '2. 建议勾选权限：repo（点 Star 与仓库）、read:user（个人资料）、notifications（通知）；\n'
             '3. 生成后复制以 ghp_ 开头的令牌粘贴到上方输入框即可。',
-            style: AppTextStyles.caption,
+            style: context.captionStyle,
           ),
         ],
       ),
@@ -423,7 +421,7 @@ class _LoginPageState extends State<LoginPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('OAuth 设备授权登录', style: AppTextStyles.bodyStrong),
+            Text('OAuth 设备授权登录', style: context.bodyStrongStyle),
             TextButton(
               onPressed: () => setState(
                 () => _showDeviceFlowConfig = !_showDeviceFlowConfig,
@@ -435,19 +433,26 @@ class _LoginPageState extends State<LoginPage> {
           ],
         ),
         if (kIsWeb)
-          const Text(
+          Text(
             'Web 浏览器环境下 GitHub OAuth 端点受跨域限制，请优先使用上方 Token 登录。',
-            style: AppTextStyles.caption,
+            style: context.captionStyle,
           ),
-        if (_showDeviceFlowConfig) ...[
+        if (!kIsWeb && GlobalConstants.oauthClientId.trim().isEmpty)
+          Text(
+            '当前构建未内置 OAuth Client ID：请先在「配置 Client ID」中填入自己的 '
+            'GitHub OAuth App Client ID（需开启 Device Flow），或直接使用上方个人 Token 登录。',
+            style: context.captionStyle,
+          ),
+        if (_showDeviceFlowConfig ||
+            (!kIsWeb && GlobalConstants.oauthClientId.trim().isEmpty)) ...[
           const SizedBox(height: 8),
           TextField(
             controller: _clientIdController,
             decoration: InputDecoration(
               hintText: '输入你的 GitHub OAuth App Client ID',
-              hintStyle: AppTextStyles.caption,
+              hintStyle: context.captionStyle,
               filled: true,
-              fillColor: AppColors.inputFill,
+              fillColor: context.appColors.inputFill,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 14,
                 vertical: 12,
@@ -465,25 +470,25 @@ class _LoginPageState extends State<LoginPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.primarySurface,
+              color: context.appColors.primarySurface,
               borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(color: AppColors.primary),
+              border: Border.all(color: context.appColors.primary),
             ),
             child: Column(
               children: [
-                const Text('请在浏览器中输入以下设备授权码', style: AppTextStyles.bodySmall),
+                Text('请在浏览器中输入以下设备授权码', style: context.bodySmallStyle),
                 const SizedBox(height: 8),
                 SelectableText(
                   activeDevice.userCode,
-                  style: AppTextStyles.pageTitle.copyWith(
+                  style: context.pageTitleStyle.copyWith(
                     letterSpacing: 3,
-                    color: AppColors.primary,
+                    color: context.appColors.primary,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   '等待授权确认中（剩余 $_remainingSeconds 秒）',
-                  style: AppTextStyles.caption,
+                  style: context.captionStyle,
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -492,8 +497,8 @@ class _LoginPageState extends State<LoginPage> {
                     ElevatedButton.icon(
                       onPressed: () => _copyCodeAndOpenBrowser(activeDevice),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
+                        backgroundColor: context.appColors.brandButtonBg,
+                        foregroundColor: context.appColors.brandButtonFg,
                       ),
                       icon: const Icon(Icons.open_in_browser, size: 16),
                       label: const Text('复制并前往授权'),
@@ -519,8 +524,8 @@ class _LoginPageState extends State<LoginPage> {
             child: OutlinedButton.icon(
               onPressed: kIsWeb ? null : _startDeviceFlow,
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.brandDark,
-                side: const BorderSide(color: AppColors.divider),
+                foregroundColor: context.appColors.brandDark,
+                side: BorderSide(color: context.appColors.divider),
                 shape: const StadiumBorder(),
               ),
               icon: const Icon(Icons.qr_code_2, size: 18),

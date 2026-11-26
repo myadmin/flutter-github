@@ -36,7 +36,7 @@ class GhRepoCard extends StatelessWidget {
       child: Semantics(
         button: onTap != null,
         child: Material(
-          color: AppColors.cardBackground,
+          color: context.appColors.cardBackground,
           borderRadius: BorderRadius.circular(AppRadius.card),
           child: InkWell(
             onTap: onTap,
@@ -46,7 +46,7 @@ class GhRepoCard extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(AppRadius.card),
                 border: Border.all(
-                  color: AppColors.divider.withValues(alpha: 0.6),
+                  color: context.appColors.divider.withValues(alpha: 0.6),
                 ),
               ),
               child: Column(
@@ -71,24 +71,24 @@ class GhRepoCard extends StatelessWidget {
                               : '${repo.ownerLogin}/${repo.repoName}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.tileTitle.copyWith(
-                            color: AppColors.primary,
+                          style: context.tileTitleStyle.copyWith(
+                            color: context.appColors.primary,
                           ),
                         ),
                       ),
                       if (repo.isPrivate) ...[
                         const SizedBox(width: 6),
-                        const _BadgePill(
+                        _BadgePill(
                           label: 'Private',
-                          color: AppColors.textSecondary,
-                          bgColor: AppColors.inputFill,
+                          color: context.appColors.textSecondary,
+                          bgColor: context.appColors.inputFill,
                         ),
                       ] else if (repo.isFork) ...[
                         const SizedBox(width: 6),
-                        const _BadgePill(
+                        _BadgePill(
                           label: 'Fork',
-                          color: AppColors.textSecondary,
-                          bgColor: AppColors.inputFill,
+                          color: context.appColors.textSecondary,
+                          bgColor: context.appColors.inputFill,
                         ),
                       ],
                       if (showStarButton &&
@@ -112,9 +112,9 @@ class GhRepoCard extends StatelessWidget {
                       repo.description,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodySmall.copyWith(
+                      style: context.bodySmallStyle.copyWith(
                         height: 1.4,
-                        color: AppColors.textSecondary,
+                        color: context.appColors.textSecondary,
                       ),
                     ),
                   ],
@@ -163,7 +163,7 @@ class GhRepoCard extends StatelessWidget {
                       if (repo.updatedAt != null)
                         Text(
                           '更新于 ${formatRelativeTime(repo.updatedAt)}',
-                          style: AppTextStyles.captionSmall,
+                          style: context.captionSmallStyle,
                         ),
                     ],
                   ),
@@ -196,9 +196,9 @@ class _BadgePill extends StatelessWidget {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appColors.divider),
       ),
-      child: Text(label, style: AppTextStyles.label.copyWith(color: color)),
+      child: Text(label, style: context.labelStyle.copyWith(color: color)),
     );
   }
 }
@@ -214,13 +214,13 @@ class _TopicTag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
-        color: AppColors.primarySurface,
+        color: context.appColors.primarySurface,
         borderRadius: BorderRadius.circular(AppRadius.small),
       ),
       child: Text(
         label,
-        style: AppTextStyles.label.copyWith(
-          color: AppColors.primary,
+        style: context.labelStyle.copyWith(
+          color: context.appColors.primary,
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -251,9 +251,9 @@ class _StatItem extends StatelessWidget {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: AppColors.textSecondary),
+            Icon(icon, size: 14, color: context.appColors.textSecondary),
             const SizedBox(width: 4),
-            Text(formatCompactNumber(count), style: AppTextStyles.caption),
+            Text(formatCompactNumber(count), style: context.captionStyle),
           ],
         );
       });
@@ -261,9 +261,9 @@ class _StatItem extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: AppColors.textSecondary),
+        Icon(icon, size: 14, color: context.appColors.textSecondary),
         const SizedBox(width: 4),
-        Text(text, style: AppTextStyles.caption),
+        Text(text, style: context.captionStyle),
       ],
     );
   }

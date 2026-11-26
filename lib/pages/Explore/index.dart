@@ -261,7 +261,7 @@ class _ExploreViewState extends State<ExploreView> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.pageBackground,
+      color: context.appColors.pageBackground,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(
@@ -285,16 +285,16 @@ class _ExploreViewState extends State<ExploreView> {
 
   Widget _buildHeader() {
     return Container(
-      color: Colors.white,
+      color: context.appColors.cardBackground,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.code, color: AppColors.brandDark, size: 22),
+              Icon(Icons.code, color: context.appColors.brandDark, size: 22),
               const SizedBox(width: 8),
-              const Text('探索开源项目', style: AppTextStyles.sectionTitle),
+              Text('探索开源项目', style: context.sectionTitleStyle),
               const Spacer(),
               // 热门时间跨度切换胶囊
               PopupMenuButton<TrendingSince>(
@@ -313,29 +313,29 @@ class _ExploreViewState extends State<ExploreView> {
                     vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.primarySurface,
+                    color: context.appColors.primarySurface,
                     borderRadius: BorderRadius.circular(AppRadius.pill),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.local_fire_department,
                         size: 15,
-                        color: AppColors.primary,
+                        color: context.appColors.primary,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         _selectedSince.label,
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.primary,
+                        style: context.captionStyle.copyWith(
+                          color: context.appColors.primary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const Icon(
+                      Icon(
                         Icons.arrow_drop_down,
                         size: 16,
-                        color: AppColors.primary,
+                        color: context.appColors.primary,
                       ),
                     ],
                   ),
@@ -357,20 +357,20 @@ class _ExploreViewState extends State<ExploreView> {
                   height: 36,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
-                    color: AppColors.inputFill,
+                    color: context.appColors.inputFill,
                     borderRadius: BorderRadius.circular(AppRadius.pill),
                   ),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.search,
                         size: 18,
-                        color: AppColors.textSecondary,
+                        color: context.appColors.textSecondary,
                       ),
                       const SizedBox(width: 8),
                       Text(
                         '搜索 GitHub 仓库、用户或主题...',
-                        style: AppTextStyles.caption.copyWith(fontSize: 13),
+                        style: context.captionStyle.copyWith(fontSize: 13),
                       ),
                     ],
                   ),
@@ -405,16 +405,18 @@ class _ExploreViewState extends State<ExploreView> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppRadius.pill),
                       ),
-                      selectedColor: AppColors.brandDark,
+                      selectedColor: context.appColors.brandButtonBg,
                       labelStyle: TextStyle(
                         fontSize: 12,
                         height: 1.2,
-                        color: selected ? Colors.white : AppColors.textPrimary,
+                        color: selected
+                            ? context.appColors.brandButtonFg
+                            : context.appColors.textPrimary,
                         fontWeight: selected
                             ? FontWeight.w600
                             : FontWeight.normal,
                       ),
-                      backgroundColor: AppColors.inputFill,
+                      backgroundColor: context.appColors.inputFill,
                       side: BorderSide.none,
                       onSelected: (_) => _selectLanguage(lang),
                     ),
@@ -431,14 +433,18 @@ class _ExploreViewState extends State<ExploreView> {
   Widget _buildSectionToolbar() {
     return Row(
       children: [
-        const Icon(Icons.explore_outlined, size: 17, color: AppColors.primary),
+        Icon(
+          Icons.explore_outlined,
+          size: 17,
+          color: context.appColors.primary,
+        ),
         const SizedBox(width: 5),
         Expanded(
           child: Text(
             _selectedLanguage == '全部' ? '开源精选' : '$_selectedLanguage 精选',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodyStrong,
+            style: context.bodyStrongStyle,
           ),
         ),
         for (final mode in ExploreFeedMode.values)
@@ -446,8 +452,8 @@ class _ExploreViewState extends State<ExploreView> {
             padding: const EdgeInsets.only(left: 6),
             child: Material(
               color: _feedMode == mode
-                  ? AppColors.primarySurface
-                  : Colors.white,
+                  ? context.appColors.primarySurface
+                  : context.appColors.cardBackground,
               borderRadius: BorderRadius.circular(AppRadius.pill),
               child: InkWell(
                 onTap: () => _selectFeedMode(mode),
@@ -461,17 +467,17 @@ class _ExploreViewState extends State<ExploreView> {
                     borderRadius: BorderRadius.circular(AppRadius.pill),
                     border: Border.all(
                       color: _feedMode == mode
-                          ? AppColors.primary
-                          : AppColors.divider,
+                          ? context.appColors.primary
+                          : context.appColors.divider,
                     ),
                   ),
                   child: Text(
                     mode.label,
-                    style: AppTextStyles.label.copyWith(
+                    style: context.labelStyle.copyWith(
                       fontSize: 11,
                       color: _feedMode == mode
-                          ? AppColors.primary
-                          : AppColors.textSecondary,
+                          ? context.appColors.primary
+                          : context.appColors.textSecondary,
                       fontWeight: _feedMode == mode
                           ? FontWeight.w600
                           : FontWeight.normal,

@@ -25,14 +25,14 @@ class HmEmptyView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 56, color: AppColors.divider),
+          Icon(icon, size: 56, color: context.appColors.divider),
           const SizedBox(height: 14),
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: context.appColors.textPrimary,
             ),
           ),
           if (description.isNotEmpty) ...[
@@ -42,7 +42,7 @@ class HmEmptyView extends StatelessWidget {
               child: Text(
                 description,
                 textAlign: TextAlign.center,
-                style: AppTextStyles.caption,
+                style: context.captionStyle,
               ),
             ),
           ],
@@ -53,8 +53,8 @@ class HmEmptyView extends StatelessWidget {
               child: OutlinedButton(
                 onPressed: onAction,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.brandDark,
-                  side: const BorderSide(color: AppColors.brandDark),
+                  foregroundColor: context.appColors.brandDark,
+                  side: BorderSide(color: context.appColors.brandDark),
                   padding: const EdgeInsets.symmetric(horizontal: 26),
                   shape: const StadiumBorder(),
                   textStyle: const TextStyle(

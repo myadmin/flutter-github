@@ -35,10 +35,20 @@ class FootprintStore {
     }
   }
 
-  static Future<List<FootprintItem>> record(FootprintItem item) async {
+  /// 写操作串行化队列：详情页、搜索页可能同时记录足迹，
+  /// 读-改-写并发会互相覆盖导致记录丢失。
+  static Future<void> _writeQueue = Future<void>.value();
+
+  static Future<List<FootprintItem>> record(FootprintItem item) {
     if (item.owner.isEmpty || item.name.isEmpty) {
       return load();
     }
+    final result = _writeQueue.then((_) => _recordInternal(item));
+    _writeQueue = result.then<void>((_) {}, onError: (Object _) {});
+    return result;
+  }
+
+  static Future<List<FootprintItem>> _recordInternal(FootprintItem item) async {
     final items = await load();
     final next = [
       item,

@@ -7,7 +7,9 @@ import 'package:gh_explorer/routes/index.dart';
 import 'package:gh_explorer/stores/explore_tags_controller.dart';
 import 'package:gh_explorer/stores/rate_limit_controller.dart';
 import 'package:gh_explorer/stores/star_sync_controller.dart';
+import 'package:gh_explorer/stores/theme_controller.dart';
 import 'package:gh_explorer/stores/user_controller.dart';
+import 'package:gh_explorer/utils/app_error_reporter.dart';
 import 'package:gh_explorer/utils/dio_request.dart';
 import 'package:gh_explorer/utils/web_url_strategy.dart';
 
@@ -18,15 +20,19 @@ void main(List<String> args) {
   // Web 端启用真实路径策略（/repo?...），非 Web 平台为空实现
   configureWebUrlStrategy();
 
-  // 捕获未处理的 Flutter 框架同步异常并打印定位日志
+  // 捕获未处理的 Flutter 框架同步异常
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
-    debugPrint('[FlutterError] ${details.exceptionAsString()}');
+    AppErrorReporter.report(
+      details.exception,
+      details.stack,
+      context: 'FlutterError',
+    );
   };
 
-  // 兜底捕获未 await 的异步异常，避免在 Release 构建中静默丢失
+  // 兜底捕获未 await 的异步异常，交给统一上报入口，避免 Release 中静默消失
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
-    debugPrint('[未捕获异步异常] $error\n$stack');
+    AppErrorReporter.report(error, stack, context: '未捕获异步异常');
     return true;
   };
 
@@ -39,6 +45,8 @@ void main(List<String> args) {
     permanent: true,
   );
   unawaited(exploreTagsController.ensureLoaded());
+  final themeController = Get.put(ThemeController(), permanent: true);
+  unawaited(themeController.ensureLoaded());
 
   // 将网络层捕获到的 GitHub RateLimit 响应头按资源域同步到全局配额控制器
   DioRequest.onResourceRateLimitUpdate =

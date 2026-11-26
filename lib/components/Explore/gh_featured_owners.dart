@@ -24,18 +24,18 @@ class GhFeaturedOwners extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Icon(
+            Icon(
               Icons.groups_outlined,
               size: 18,
-              color: AppColors.brandDark,
+              color: context.appColors.brandDark,
             ),
             const SizedBox(width: 6),
-            const Text('热门开发者与开源组织', style: AppTextStyles.bodyStrong),
+            Text('热门开发者与开源组织', style: context.bodyStrongStyle),
             const Spacer(),
             Text(
               '高关注账号',
-              style: AppTextStyles.captionSmall.copyWith(
-                color: AppColors.textSecondary,
+              style: context.captionSmallStyle.copyWith(
+                color: context.appColors.textSecondary,
               ),
             ),
           ],
@@ -73,7 +73,7 @@ class _FeaturedOwnerCard extends StatelessWidget {
     return SizedBox(
       width: 92,
       child: Material(
-        color: AppColors.cardBackground,
+        color: context.appColors.cardBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
         child: InkWell(
           onTap: onTap,
@@ -83,7 +83,7 @@ class _FeaturedOwnerCard extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppRadius.card),
               border: Border.all(
-                color: AppColors.divider.withValues(alpha: 0.6),
+                color: context.appColors.divider.withValues(alpha: 0.6),
               ),
             ),
             child: Column(
@@ -102,16 +102,18 @@ class _FeaturedOwnerCard extends StatelessWidget {
                   owner.login,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.captionSmall.copyWith(
-                    color: AppColors.textPrimary,
+                  style: context.captionSmallStyle.copyWith(
+                    color: context.appColors.textPrimary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   isOrg ? '组织' : '开发者',
-                  style: AppTextStyles.label.copyWith(
-                    color: isOrg ? AppColors.primary : AppColors.textSecondary,
+                  style: context.labelStyle.copyWith(
+                    color: isOrg
+                        ? context.appColors.primary
+                        : context.appColors.textSecondary,
                   ),
                 ),
               ],

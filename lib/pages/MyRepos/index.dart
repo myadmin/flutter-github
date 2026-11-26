@@ -84,12 +84,12 @@ class _MyReposPageState extends State<MyReposPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
         title: const Text('我的仓库'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.pageBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
       ),
       body: Obx(() {
@@ -127,7 +127,7 @@ class _MyReposPageState extends State<MyReposPage> {
     const options = [('all', '全部'), ('public', '公开'), ('private', '私有')];
     return Container(
       width: double.infinity,
-      color: Colors.white,
+      color: context.appColors.cardBackground,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Wrap(
         spacing: 8,

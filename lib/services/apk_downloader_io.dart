@@ -1,15 +1,26 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 
-/// 使用独立纯净 Dio 下载 APK 到目标目录，避免将 GitHub API Token 转发到 CDN 跳转地址
+/// 使用独立纯净 Dio 下载 APK 到目标目录，避免将 GitHub API Token 转发到 CDN 跳转地址。
+///
+/// 下载完成后会校验 HTTPS、文件大小与 SHA-256 摘要（若 Release 产物记录了摘要），
+/// 校验失败会删除临时文件并抛错，绝不把未校验的安装包交给系统安装器。
 Future<String> downloadApkToFile({
   required String url,
   required String directoryPath,
   required String fileName,
+  String expectedSha256 = '',
+  int expectedSize = 0,
   void Function(int received, int total)? onProgress,
   CancelToken? cancelToken,
 }) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+    throw ArgumentError.value(url, 'url', '安装包下载地址必须为 HTTPS');
+  }
+
   final dir = Directory(directoryPath);
   if (!await dir.exists()) {
     await dir.create(recursive: true);
@@ -44,6 +55,21 @@ Future<String> downloadApkToFile({
     if (!await partFile.exists() || await partFile.length() <= 0) {
       throw const FileSystemException('下载完成但安装包为空');
     }
+
+    final downloadedSize = await partFile.length();
+    if (expectedSize > 0 && downloadedSize != expectedSize) {
+      throw FileSystemException(
+        '安装包大小与 Release 记录不一致（$downloadedSize / $expectedSize 字节）',
+      );
+    }
+
+    if (expectedSha256.isNotEmpty) {
+      final digest = sha256.convert(await partFile.readAsBytes()).toString();
+      if (digest.toLowerCase() != expectedSha256.toLowerCase()) {
+        throw const FileSystemException('安装包校验失败：SHA-256 摘要不匹配');
+      }
+    }
+
     if (await targetFile.exists()) {
       await targetFile.delete();
     }
@@ -57,4 +83,10 @@ Future<String> downloadApkToFile({
   } finally {
     client.close();
   }
+}
+
+/// 计算本地文件的 SHA-256 十六进制摘要（供测试与手动校验使用）
+Future<String> sha256OfFile(String path) async {
+  final bytes = await File(path).readAsBytes();
+  return sha256.convert(bytes).toString();
 }

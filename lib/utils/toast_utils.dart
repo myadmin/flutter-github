@@ -7,7 +7,11 @@ class ToastUtils {
   const ToastUtils._();
 
   static String? _lastMessage;
-  static DateTime? _throttleUntil;
+  static DateTime? _lastShownAt;
+
+  /// 相同文案的最小重复间隔：仅拦截"同一帧内连点"造成的重复提示，
+  /// 不再吞掉 duration 内后续真实的第二条提示。
+  static const Duration _repeatWindow = Duration(milliseconds: 400);
 
   static void showToast(
     BuildContext context,
@@ -16,12 +20,14 @@ class ToastUtils {
   }) {
     final text = message ?? '操作成功';
     final now = DateTime.now();
-    final until = _throttleUntil;
-    if (_lastMessage == text && until != null && now.isBefore(until)) {
+    final last = _lastShownAt;
+    if (_lastMessage == text &&
+        last != null &&
+        now.difference(last) < _repeatWindow) {
       return;
     }
     _lastMessage = text;
-    _throttleUntil = now.add(Duration(seconds: duration));
+    _lastShownAt = now;
 
     final TextPainter painter = TextPainter(
       text: TextSpan(
@@ -41,18 +47,24 @@ class ToastUtils {
       width = maxWidth;
     }
 
+    final colors = context.appColors;
     final messenger = ScaffoldMessenger.of(context);
     messenger.removeCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
         width: width,
+        backgroundColor: colors.isDark ? colors.inputFill : AppColors.brandDark,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(AppRadius.toast)),
         ),
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: duration),
-        content: Text(text, textAlign: TextAlign.center),
+        content: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.white),
+        ),
       ),
     );
   }

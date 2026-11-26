@@ -143,12 +143,12 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
         title: const Text('Issues 与 PR'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.pageBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
       ),
       body: Center(
@@ -160,7 +160,7 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
             children: [
               Container(
                 width: double.infinity,
-                color: Colors.white,
+                color: context.appColors.cardBackground,
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -175,7 +175,7 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
                             onChanged: (_) => setState(() {}),
                             decoration: InputDecoration(
                               hintText: '搜索当前项目全部 Issues / PR（如关键词或 #编号）',
-                              hintStyle: AppTextStyles.caption,
+                              hintStyle: context.captionStyle,
                               isDense: true,
                               prefixIcon: const Icon(Icons.search, size: 19),
                               suffixIcon:
@@ -188,7 +188,7 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
                                     )
                                   : null,
                               filled: true,
-                              fillColor: AppColors.inputFill,
+                              fillColor: context.appColors.inputFill,
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 12,
                                 vertical: 9,
@@ -206,8 +206,8 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
                         ElevatedButton(
                           onPressed: _submitSearch,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.brandDark,
-                            foregroundColor: Colors.white,
+                            backgroundColor: context.appColors.brandButtonBg,
+                            foregroundColor: context.appColors.brandButtonFg,
                             elevation: 0,
                             shape: const StadiumBorder(),
                             padding: const EdgeInsets.symmetric(
@@ -248,8 +248,8 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
                             _searchTotalCount != null)
                           Text(
                             '共 $_searchTotalCount 条',
-                            style: AppTextStyles.captionSmall.copyWith(
-                              color: AppColors.primary,
+                            style: context.captionSmallStyle.copyWith(
+                              color: context.appColors.primary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -339,9 +339,11 @@ class _IssueCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = item.isOpen ? AppColors.success : AppColors.merged;
+    final statusColor = item.isOpen
+        ? context.appColors.success
+        : context.appColors.merged;
     return Material(
-      color: Colors.white,
+      color: context.appColors.cardBackground,
       borderRadius: BorderRadius.circular(AppRadius.card),
       child: InkWell(
         onTap: onTap,
@@ -350,7 +352,9 @@ class _IssueCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.card),
-            border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+            border: Border.all(
+              color: context.appColors.divider.withValues(alpha: 0.6),
+            ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -367,7 +371,7 @@ class _IssueCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.title, style: AppTextStyles.bodyStrong),
+                    Text(item.title, style: context.bodyStrongStyle),
                     if (item.labels.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Wrap(
@@ -381,15 +385,15 @@ class _IssueCard extends StatelessWidget {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: AppColors.primarySurface,
+                                color: context.appColors.primarySurface,
                                 borderRadius: BorderRadius.circular(
                                   AppRadius.pill,
                                 ),
                               ),
                               child: Text(
                                 label.name,
-                                style: AppTextStyles.label.copyWith(
-                                  color: AppColors.primary,
+                                style: context.labelStyle.copyWith(
+                                  color: context.appColors.primary,
                                 ),
                               ),
                             ),
@@ -404,19 +408,19 @@ class _IssueCard extends StatelessWidget {
                             '#${item.number} · ${item.user.login} · ${formatRelativeTime(item.createdAt)}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.captionSmall,
+                            style: context.captionSmallStyle,
                           ),
                         ),
                         if (item.commentsCount > 0) ...[
-                          const Icon(
+                          Icon(
                             Icons.chat_bubble_outline,
                             size: 13,
-                            color: AppColors.textSecondary,
+                            color: context.appColors.textSecondary,
                           ),
                           const SizedBox(width: 4),
                           Text(
                             '${item.commentsCount}',
-                            style: AppTextStyles.captionSmall,
+                            style: context.captionSmallStyle,
                           ),
                         ],
                       ],

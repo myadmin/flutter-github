@@ -9,25 +9,29 @@ class AppNetworkImage extends StatelessWidget {
     this.fit = BoxFit.cover,
     this.width,
     this.height,
+    this.placeholderIcon = Icons.person_outline,
     this.placeholderIconSize = 28,
     this.decodeWidth,
     this.borderRadius,
+    this.semanticLabel,
   });
 
   final String url;
   final BoxFit fit;
   final double? width;
   final double? height;
+  final IconData placeholderIcon;
   final double placeholderIconSize;
   final double? decodeWidth;
   final BorderRadius? borderRadius;
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
     final trimmed = url.trim();
     Widget child;
     if (trimmed.isEmpty) {
-      child = _buildPlaceholder(showIcon: true);
+      child = _buildPlaceholder(context, showIcon: true);
     } else {
       final cacheWidth = decodeWidth == null
           ? null
@@ -38,12 +42,13 @@ class AppNetworkImage extends StatelessWidget {
         height: height,
         fit: fit,
         cacheWidth: cacheWidth,
+        semanticLabel: semanticLabel,
         loadingBuilder: (context, imageChild, progress) {
           if (progress == null) return imageChild;
-          return _buildPlaceholder(showIcon: false);
+          return _buildPlaceholder(context, showIcon: false);
         },
         errorBuilder: (context, error, stackTrace) {
-          return _buildPlaceholder(showIcon: true);
+          return _buildPlaceholder(context, showIcon: true);
         },
       );
     }
@@ -53,19 +58,22 @@ class AppNetworkImage extends StatelessWidget {
     return child;
   }
 
-  Widget _buildPlaceholder({required bool showIcon}) {
-    return Container(
+  Widget _buildPlaceholder(BuildContext context, {required bool showIcon}) {
+    final placeholder = Container(
       width: width,
       height: height,
-      color: AppColors.imagePlaceholder,
+      color: context.appColors.imagePlaceholder,
       alignment: Alignment.center,
       child: showIcon
           ? Icon(
-              Icons.person_outline,
+              placeholderIcon,
               size: placeholderIconSize,
-              color: AppColors.textSecondary,
+              color: context.appColors.textSecondary,
             )
           : null,
     );
+    final label = semanticLabel;
+    if (label == null || label.isEmpty) return placeholder;
+    return Semantics(image: true, label: label, child: placeholder);
   }
 }

@@ -3,7 +3,7 @@ description: "基于 Flutter 的 GitHub 探索与项目管理客户端，参考 
 publish_to: 'none'
 
 # 版本号格式：<versionName>+<versionCode>
-version: 1.1.1+11
+version: 1.2.0+12
 
 environment:
   sdk: ^3.13.7
@@ -29,6 +29,8 @@ dependencies:
   url_launcher: ^6.3.3
   # 渲染仓库 README 与 Issue / 评论的 Markdown 内容
   flutter_markdown_plus: ^1.0.12
+  flutter_secure_storage: ^11.2.0
+  crypto: ^3.0.8
 
 dev_dependencies:
   flutter_test:

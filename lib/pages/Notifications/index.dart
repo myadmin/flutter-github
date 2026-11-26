@@ -108,12 +108,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
         title: const Text('消息通知'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.pageBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
         actions: [
           if (_userController.isLoggedIn)
@@ -138,7 +138,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
               children: [
                 Container(
                   width: double.infinity,
-                  color: Colors.white,
+                  color: context.appColors.cardBackground,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 8,
@@ -206,7 +206,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
           final item = _list[index];
           final unread = item.unread && !_locallyReadIds.contains(item.id);
           return Material(
-            color: Colors.white,
+            color: context.appColors.cardBackground,
             borderRadius: BorderRadius.circular(AppRadius.card),
             child: InkWell(
               onTap: () => _openNotification(item),
@@ -216,7 +216,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(AppRadius.card),
                   border: Border.all(
-                    color: AppColors.divider.withValues(alpha: 0.6),
+                    color: context.appColors.divider.withValues(alpha: 0.6),
                   ),
                 ),
                 child: Row(
@@ -241,8 +241,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                   width: 8,
                                   height: 8,
                                   margin: const EdgeInsets.only(right: 6),
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.primary,
+                                  decoration: BoxDecoration(
+                                    color: context.appColors.primary,
                                     shape: BoxShape.circle,
                                   ),
                                 ),
@@ -251,15 +251,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                   item.repoFullName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyles.caption.copyWith(
-                                    color: AppColors.primary,
+                                  style: context.captionStyle.copyWith(
+                                    color: context.appColors.primary,
                                   ),
                                 ),
                               ),
                               if (item.updatedAt != null)
                                 Text(
                                   formatRelativeTime(item.updatedAt),
-                                  style: AppTextStyles.captionSmall,
+                                  style: context.captionSmallStyle,
                                 ),
                             ],
                           ),
@@ -268,12 +268,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
                             item.subjectTitle,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.bodyStrong,
+                            style: context.bodyStrongStyle,
                           ),
                           const SizedBox(height: 4),
                           Text(
                             '${item.subjectType} · ${item.reason}',
-                            style: AppTextStyles.captionSmall,
+                            style: context.captionSmallStyle,
                           ),
                         ],
                       ),

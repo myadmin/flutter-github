@@ -91,12 +91,13 @@ class DioRequest {
           _captureRateLimit(response.headers, response.requestOptions.path);
           return handler.next(response);
         },
-        onError: (error, handler) {
+        onError: (error, handler) async {
           final headers = error.response?.headers;
           if (headers != null) {
             _captureRateLimit(headers, error.requestOptions.path);
           }
-          final translated = _translateError(error);
+          // 令牌失效时先完成本地清除，再通知 UI 跳转登录，避免跳转后仍带着旧 token 重试
+          final translated = await _translateError(error);
           debugPrint(
             '[DioRequest] ${error.requestOptions.method} '
             '${error.requestOptions.uri} 失败: $translated',
@@ -152,7 +153,7 @@ class DioRequest {
   }
 
   /// 将 Dio 底层错误码与异常类型翻译为面向用户的中文业务/网络异常
-  Exception _translateError(DioException error) {
+  Future<Exception> _translateError(DioException error) async {
     if (error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.sendTimeout ||
         error.type == DioExceptionType.receiveTimeout) {
@@ -166,7 +167,7 @@ class DioRequest {
 
     if (statusCode == 401) {
       if (!skipRedirect) {
-        tokenManager.removeToken();
+        await tokenManager.removeToken();
         onUnauthorized?.call();
         return NetworkException('GitHub 凭证已失效，请重新登录');
       }
@@ -195,10 +196,25 @@ class DioRequest {
     final data = response?.data;
     if (data is Map && data['message'] != null) {
       final rawMsg = data['message'].toString();
+      final lowerMsg = rawMsg.toLowerCase();
       if (statusCode == 404) {
         return ApiException('请求的仓库或用户不存在', code: '404');
       }
       if (statusCode == 403) {
+        // 次级限流（快速连续请求触发 abuse detection）与配额耗尽不同，稍后重试即可
+        if (lowerMsg.contains('secondary rate limit') ||
+            lowerMsg.contains('abuse detection')) {
+          return ApiException('操作过于频繁，已触发 GitHub 次级限流，请稍后再试', code: '403');
+        }
+        // contents API 对超过 1 MB 的 blob 直接返回 403，应提示可改用「在浏览器中打开」
+        if (lowerMsg.contains('larger than 1 mb') ||
+            lowerMsg.contains('up to 1 mb') ||
+            lowerMsg.contains('too_large')) {
+          return ApiException(
+            '文件超过 1 MB，GitHub 接口不支持直接读取，请在浏览器中打开',
+            code: '403',
+          );
+        }
         return ApiException('权限不足：$rawMsg', code: '403');
       }
       return ApiException(rawMsg, code: statusCode?.toString());

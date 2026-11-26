@@ -5,6 +5,8 @@ Future<String> downloadApkToFile({
   required String url,
   required String directoryPath,
   required String fileName,
+  String expectedSha256 = '',
+  int expectedSize = 0,
   void Function(int received, int total)? onProgress,
   CancelToken? cancelToken,
 }) async {

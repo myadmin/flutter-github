@@ -196,9 +196,9 @@ class _GhUpdateDialogState extends State<_GhUpdateDialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(summary, style: AppTextStyles.caption),
+                  Text(summary, style: context.captionStyle),
                   const SizedBox(height: 10),
-                  const Text('更新说明', style: AppTextStyles.bodyStrong),
+                  Text('更新说明', style: context.bodyStrongStyle),
                   const SizedBox(height: 6),
                   GhMarkdownView(
                     data: displayNotes,
@@ -228,16 +228,16 @@ class _GhUpdateDialogState extends State<_GhUpdateDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('正在下载新版安装包，请保持应用在前台', style: AppTextStyles.bodySmall),
+            Text('正在下载新版安装包，请保持应用在前台', style: context.bodySmallStyle),
             const SizedBox(height: 12),
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.small),
               child: LinearProgressIndicator(
                 value: ratio,
                 minHeight: 7,
-                backgroundColor: AppColors.inputFill,
-                valueColor: const AlwaysStoppedAnimation<Color>(
-                  AppColors.primary,
+                backgroundColor: context.appColors.inputFill,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  context.appColors.primary,
                 ),
               ),
             ),
@@ -245,11 +245,11 @@ class _GhUpdateDialogState extends State<_GhUpdateDialog> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(bytesHint, style: AppTextStyles.caption),
+                Text(bytesHint, style: context.captionStyle),
                 Text(
                   pctText,
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.primary,
+                  style: context.captionStyle.copyWith(
+                    color: context.appColors.primary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -263,11 +263,11 @@ class _GhUpdateDialogState extends State<_GhUpdateDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('安装包已下载完成！', style: AppTextStyles.bodyStrong),
+            Text('安装包已下载完成！', style: context.bodyStrongStyle),
             const SizedBox(height: 6),
             Text(
               '系统尚未开启本应用「安装未知来源应用」权限。请在弹出的系统设置中开启授权后，返回本弹窗点击「继续安装」。',
-              style: AppTextStyles.bodySmall.copyWith(height: 1.55),
+              style: context.bodySmallStyle.copyWith(height: 1.55),
             ),
           ],
         );
@@ -277,11 +277,11 @@ class _GhUpdateDialogState extends State<_GhUpdateDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('安装包已就绪，正在调起系统安装界面…', style: AppTextStyles.bodyStrong),
+            Text('安装包已就绪，正在调起系统安装界面…', style: context.bodyStrongStyle),
             const SizedBox(height: 6),
             Text(
               '如果未弹出安装页面或系统提示签名冲突，请确认新旧版本签名一致，也可尝试点击「重新安装」或前往浏览器下载。',
-              style: AppTextStyles.caption.copyWith(height: 1.55),
+              style: context.captionStyle.copyWith(height: 1.55),
             ),
           ],
         );
@@ -293,16 +293,13 @@ class _GhUpdateDialogState extends State<_GhUpdateDialog> {
           children: [
             Text(
               _errorMessage.isEmpty ? '下载或安装过程出现异常' : _errorMessage,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.badge,
+              style: context.bodySmallStyle.copyWith(
+                color: context.appColors.badge,
                 height: 1.5,
               ),
             ),
             const SizedBox(height: 6),
-            const Text(
-              '你可以重试应用内下载，或改用系统浏览器直接下载安装。',
-              style: AppTextStyles.caption,
-            ),
+            Text('你可以重试应用内下载，或改用系统浏览器直接下载安装。', style: context.captionStyle),
           ],
         );
     }
@@ -328,7 +325,9 @@ class _GhUpdateDialogState extends State<_GhUpdateDialog> {
             onPressed: widget.canInAppInstall
                 ? _startInAppUpdate
                 : _openInBrowser,
-            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+            style: FilledButton.styleFrom(
+              backgroundColor: context.appColors.primary,
+            ),
             child: Text(widget.canInAppInstall ? '立即更新' : '前往下载'),
           ),
         ];
@@ -348,7 +347,9 @@ class _GhUpdateDialogState extends State<_GhUpdateDialog> {
             onPressed: _downloadedPath == null
                 ? null
                 : () => _triggerInstall(_downloadedPath!),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+            style: FilledButton.styleFrom(
+              backgroundColor: context.appColors.primary,
+            ),
             child: const Text('继续安装'),
           ),
         ];
@@ -364,7 +365,9 @@ class _GhUpdateDialogState extends State<_GhUpdateDialog> {
             onPressed: _downloadedPath == null
                 ? null
                 : () => _triggerInstall(_downloadedPath!),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+            style: FilledButton.styleFrom(
+              backgroundColor: context.appColors.primary,
+            ),
             child: const Text('重新安装'),
           ),
         ];
@@ -378,7 +381,9 @@ class _GhUpdateDialogState extends State<_GhUpdateDialog> {
           TextButton(onPressed: _openInBrowser, child: const Text('浏览器下载')),
           FilledButton(
             onPressed: _startInAppUpdate,
-            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+            style: FilledButton.styleFrom(
+              backgroundColor: context.appColors.primary,
+            ),
             child: const Text('重试下载'),
           ),
         ];

@@ -1,23 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 
-/// 统一加载中弹窗（复用 hm_shop 的路由引用控制方案，避免误关业务页面）
+/// 统一加载中弹窗。
+///
+/// 使用引用计数支持多页面并发 `show()`：只要还有调用方未 `hide()`，
+/// 弹窗就保持显示；最后一个调用方 `hide()` 时才真正移除路由。
+/// 这样既避免重复弹出，也避免"后一次 show 被吞、前一次 hide 误关"。
 class LoadingDialog {
+  LoadingDialog._();
+
   static Route<void>? _route;
+  static int _showCount = 0;
+  static String _message = '加载中...';
 
   static bool get isShowing => _route != null;
 
   static void show(BuildContext context, {String? message = '加载中...'}) {
-    if (_route != null) {
-      return;
-    }
+    _showCount++;
+    _message = message ?? _message;
+    if (_route != null) return;
+    if (!context.mounted) return;
 
     final navigator = Navigator.of(context, rootNavigator: true);
-    late final Route<void> route;
-    route = DialogRoute<void>(
+    final route = DialogRoute<void>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
+        final colors = dialogContext.appColors;
         return PopScope(
           canPop: false,
           child: Dialog(
@@ -26,7 +35,7 @@ class LoadingDialog {
               child: Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: colors.cardBackground,
                   borderRadius: BorderRadius.circular(AppRadius.card),
                 ),
                 child: Column(
@@ -34,7 +43,7 @@ class LoadingDialog {
                   children: [
                     const CircularProgressIndicator(),
                     const SizedBox(height: 10),
-                    Text(message ?? ''),
+                    Text(_message, style: TextStyle(color: colors.textPrimary)),
                   ],
                 ),
               ),
@@ -47,17 +56,17 @@ class LoadingDialog {
     navigator.push(route).whenComplete(() {
       if (identical(_route, route)) {
         _route = null;
+        _showCount = 0;
       }
     });
   }
 
   static void hide() {
+    if (_showCount > 0) _showCount--;
+    if (_showCount > 0) return;
     final route = _route;
-    if (route == null || !route.isActive) {
-      _route = null;
-      return;
-    }
     _route = null;
+    if (route == null || !route.isActive) return;
     route.navigator?.removeRoute(route);
   }
 }

@@ -85,7 +85,7 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
         title: Text(
           widget.branch.isEmpty ? '提交历史' : '提交历史 (${widget.branch})',
@@ -93,8 +93,8 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
           overflow: TextOverflow.ellipsis,
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.pageBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
       ),
       body: Center(
@@ -140,16 +140,16 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
           return Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.appColors.cardBackground,
               borderRadius: BorderRadius.circular(AppRadius.card),
               border: Border.all(
-                color: AppColors.divider.withValues(alpha: 0.6),
+                color: context.appColors.divider.withValues(alpha: 0.6),
               ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(commit.titleLine, style: AppTextStyles.bodyStrong),
+                Text(commit.titleLine, style: context.bodyStrongStyle),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -167,7 +167,7 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
                         '${commit.displayAuthor} · ${formatRelativeTime(commit.committedAt)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.caption,
+                        style: context.captionStyle,
                       ),
                     ),
                     InkWell(
@@ -179,12 +179,12 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.inputFill,
+                          color: context.appColors.inputFill,
                           borderRadius: BorderRadius.circular(AppRadius.small),
                         ),
                         child: Text(
                           commit.shortSha,
-                          style: AppTextStyles.monoSmall,
+                          style: context.monoSmallStyle,
                         ),
                       ),
                     ),

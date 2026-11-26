@@ -197,6 +197,8 @@ void main() {
             required String url,
             required String directoryPath,
             required String fileName,
+            String expectedSha256 = '',
+            int expectedSize = 0,
             ApkDownloadProgressCallback? onProgress,
             CancelToken? cancelToken,
           }) async {
@@ -243,6 +245,8 @@ void main() {
             required String url,
             required String directoryPath,
             required String fileName,
+            String expectedSha256 = '',
+            int expectedSize = 0,
             ApkDownloadProgressCallback? onProgress,
             CancelToken? cancelToken,
           }) {
@@ -340,6 +344,8 @@ void main() {
             required String url,
             required String directoryPath,
             required String fileName,
+            String expectedSha256 = '',
+            int expectedSize = 0,
             ApkDownloadProgressCallback? onProgress,
             CancelToken? cancelToken,
           }) async {

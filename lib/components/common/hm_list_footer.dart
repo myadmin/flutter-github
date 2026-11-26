@@ -33,7 +33,7 @@ class HmListFooter extends StatelessWidget {
     }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
-      child: Center(child: Text(noMoreText, style: AppTextStyles.caption)),
+      child: Center(child: Text(noMoreText, style: context.captionStyle)),
     );
   }
 }

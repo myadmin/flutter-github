@@ -87,12 +87,12 @@ class _MyStarsPageState extends State<MyStarsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
         title: const Text('我的 Star'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.pageBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
       ),
       body: Obx(() {

@@ -81,12 +81,12 @@ class _UserFollowsPageState extends State<UserFollowsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
         title: Text(widget.login.isEmpty ? '关注关系' : '${widget.login} 的关系网'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.pageBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
       ),
       body: Center(
@@ -98,7 +98,7 @@ class _UserFollowsPageState extends State<UserFollowsPage> {
             children: [
               Container(
                 width: double.infinity,
-                color: Colors.white,
+                color: context.appColors.cardBackground,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 8,
@@ -159,13 +159,13 @@ class _UserFollowsPageState extends State<UserFollowsPage> {
           }
           final user = _list[index];
           return Material(
-            color: Colors.white,
+            color: context.appColors.cardBackground,
             borderRadius: BorderRadius.circular(AppRadius.card),
             child: ListTile(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppRadius.card),
                 side: BorderSide(
-                  color: AppColors.divider.withValues(alpha: 0.6),
+                  color: context.appColors.divider.withValues(alpha: 0.6),
                 ),
               ),
               leading: AppNetworkImage(
@@ -175,11 +175,11 @@ class _UserFollowsPageState extends State<UserFollowsPage> {
                 decodeWidth: 40,
                 borderRadius: BorderRadius.circular(20),
               ),
-              title: Text(user.login, style: AppTextStyles.bodyStrong),
-              subtitle: Text(user.type, style: AppTextStyles.captionSmall),
-              trailing: const Icon(
+              title: Text(user.login, style: context.bodyStrongStyle),
+              subtitle: Text(user.type, style: context.captionSmallStyle),
+              trailing: Icon(
                 Icons.chevron_right,
-                color: AppColors.textSecondary,
+                color: context.appColors.textSecondary,
               ),
               onTap: () => Navigator.pushNamed(
                 context,

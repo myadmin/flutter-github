@@ -16,6 +16,7 @@ import 'package:gh_explorer/services/app_update_service.dart';
 import 'package:gh_explorer/stores/explore_tags_controller.dart';
 import 'package:gh_explorer/stores/rate_limit_controller.dart';
 import 'package:gh_explorer/stores/star_sync_controller.dart';
+import 'package:gh_explorer/stores/theme_controller.dart';
 import 'package:gh_explorer/stores/token_manager.dart';
 import 'package:gh_explorer/stores/user_controller.dart';
 import 'package:gh_explorer/utils/api_exception.dart';
@@ -45,6 +46,10 @@ class _MineViewState extends State<MineView> {
       Get.isRegistered<ExploreTagsController>()
       ? Get.find<ExploreTagsController>()
       : Get.put(ExploreTagsController(), permanent: true);
+  late final ThemeController _themeController =
+      Get.isRegistered<ThemeController>()
+      ? Get.find<ThemeController>()
+      : Get.put(ThemeController(), permanent: true);
 
   AppUpdateService get _updateService =>
       widget.updateService ?? AppUpdateService.instance;
@@ -57,6 +62,7 @@ class _MineViewState extends State<MineView> {
   void initState() {
     super.initState();
     unawaited(_tagsController.ensureLoaded());
+    unawaited(_themeController.ensureLoaded());
     _userWatcher = ever(_userController.user, (_) {
       if (mounted && widget.isActive) {
         unawaited(_refreshRateLimit(silent: true));
@@ -209,7 +215,7 @@ class _MineViewState extends State<MineView> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.pageBackground,
+      color: context.appColors.pageBackground,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(
@@ -290,6 +296,9 @@ class _MineViewState extends State<MineView> {
                 Obx(
                   () => GhMineSettingsCard(
                     tagCount: _tagsController.displayTags.length,
+                    themeLabel: ThemeController.labelOf(
+                      _themeController.themeMode.value,
+                    ),
                     onTap: () =>
                         Navigator.pushNamed(context, AppRoutes.settingsPath),
                   ),

@@ -194,7 +194,7 @@ class _SearchViewState extends State<SearchView> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.pageBackground,
+      color: context.appColors.pageBackground,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(
@@ -222,7 +222,7 @@ class _SearchViewState extends State<SearchView> {
     final currentSort = _target == _SearchTarget.repos ? _repoSort : _userSort;
 
     return Container(
-      color: Colors.white,
+      color: context.appColors.cardBackground,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Column(
         children: [
@@ -236,7 +236,7 @@ class _SearchViewState extends State<SearchView> {
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
                     hintText: '搜索仓库、用户（如 flutter、language:dart）',
-                    hintStyle: AppTextStyles.caption,
+                    hintStyle: context.captionStyle,
                     prefixIcon: const Icon(Icons.search, size: 20),
                     suffixIcon: _keywordController.text.isNotEmpty
                         ? IconButton(
@@ -246,7 +246,7 @@ class _SearchViewState extends State<SearchView> {
                           )
                         : null,
                     filled: true,
-                    fillColor: AppColors.inputFill,
+                    fillColor: context.appColors.inputFill,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 14,
                       vertical: 10,
@@ -262,8 +262,8 @@ class _SearchViewState extends State<SearchView> {
               ElevatedButton(
                 onPressed: () => _submitSearch(),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.brandDark,
-                  foregroundColor: Colors.white,
+                  backgroundColor: context.appColors.brandButtonBg,
+                  foregroundColor: context.appColors.brandButtonFg,
                   elevation: 0,
                   shape: const StadiumBorder(),
                   padding: const EdgeInsets.symmetric(
@@ -317,20 +317,20 @@ class _SearchViewState extends State<SearchView> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.sort,
                       size: 16,
-                      color: AppColors.textSecondary,
+                      color: context.appColors.textSecondary,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       sortOptions.firstWhere((e) => e.$1 == currentSort).$2,
-                      style: AppTextStyles.caption,
+                      style: context.captionStyle,
                     ),
-                    const Icon(
+                    Icon(
                       Icons.arrow_drop_down,
                       size: 16,
-                      color: AppColors.textSecondary,
+                      color: context.appColors.textSecondary,
                     ),
                   ],
                 ),
@@ -350,12 +350,12 @@ class _SearchViewState extends State<SearchView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('搜索历史', style: AppTextStyles.bodyStrong),
+              Text('搜索历史', style: context.bodyStrongStyle),
               TextButton(
                 onPressed: _clearHistory,
-                child: const Text(
+                child: Text(
                   '清空',
-                  style: TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: context.appColors.textSecondary),
                 ),
               ),
             ],
@@ -378,7 +378,7 @@ class _SearchViewState extends State<SearchView> {
           ),
           const SizedBox(height: 20),
         ],
-        const Text('热门搜索', style: AppTextStyles.bodyStrong),
+        Text('热门搜索', style: context.bodyStrongStyle),
         const SizedBox(height: 10),
         Wrap(
           spacing: 8,
@@ -387,7 +387,7 @@ class _SearchViewState extends State<SearchView> {
             for (final word in _hotKeywords)
               ActionChip(
                 label: Text(word),
-                backgroundColor: Colors.white,
+                backgroundColor: context.appColors.pageBackground,
                 onPressed: () => _submitSearch(word),
               ),
           ],
@@ -513,7 +513,7 @@ class _UserSearchTile extends StatelessWidget {
       child: Semantics(
         button: true,
         child: Material(
-          color: Colors.white,
+          color: context.appColors.cardBackground,
           borderRadius: BorderRadius.circular(AppRadius.card),
           child: InkWell(
             onTap: onTap,
@@ -523,7 +523,7 @@ class _UserSearchTile extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(AppRadius.card),
                 border: Border.all(
-                  color: AppColors.divider.withValues(alpha: 0.6),
+                  color: context.appColors.divider.withValues(alpha: 0.6),
                 ),
               ),
               child: Row(
@@ -540,15 +540,15 @@ class _UserSearchTile extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(user.login, style: AppTextStyles.tileTitle),
+                        Text(user.login, style: context.tileTitleStyle),
                         const SizedBox(height: 2),
-                        Text(user.type, style: AppTextStyles.caption),
+                        Text(user.type, style: context.captionStyle),
                       ],
                     ),
                   ),
-                  const Icon(
+                  Icon(
                     Icons.chevron_right,
-                    color: AppColors.textSecondary,
+                    color: context.appColors.textSecondary,
                   ),
                 ],
               ),

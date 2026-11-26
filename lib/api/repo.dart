@@ -95,6 +95,29 @@ Future<List<RepoBranch>> getRepoBranchesAPI(
   return asModelList(data, RepoBranch.fromJson);
 }
 
+/// 逐页拉取仓库分支（最多 [maxPages] 页），用于分支下拉列表
+///
+/// 大型仓库分支数量可能超过单页上限，只取首页会导致下拉缺少分支。
+Future<List<RepoBranch>> getAllRepoBranchesAPI(
+  String owner,
+  String repo, {
+  int perPage = 100,
+  int maxPages = 4,
+}) async {
+  final branches = <RepoBranch>[];
+  for (var page = 1; page <= maxPages; page++) {
+    final batch = await getRepoBranchesAPI(
+      owner,
+      repo,
+      page: page,
+      perPage: perPage,
+    );
+    branches.addAll(batch);
+    if (batch.length < perPage) break;
+  }
+  return branches;
+}
+
 /// 分页获取仓库 Commit 历史
 Future<PageResult<CommitItem>> getRepoCommitsAPI(
   String owner,

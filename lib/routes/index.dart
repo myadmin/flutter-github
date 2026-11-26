@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/pages/Footprint/index.dart';
 import 'package:gh_explorer/pages/Login/index.dart';
@@ -17,18 +18,27 @@ import 'package:gh_explorer/pages/Unknown/index.dart';
 import 'package:gh_explorer/pages/UserDetail/index.dart';
 import 'package:gh_explorer/pages/UserFollows/index.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
+import 'package:gh_explorer/stores/theme_controller.dart';
 
-/// 根 Widget 与主题配置（对齐 hm_shop routes/index.dart）
+/// 根 Widget 与主题配置（对齐 hm_shop routes/index.dart，支持实时明/暗/跟随系统切换）
 Widget getRootWidget() {
-  return MaterialApp(
-    title: 'GitHub 探索',
-    debugShowCheckedModeBanner: false,
-    routes: getRootRoutes(),
-    onGenerateRoute: buildRoute,
-    onGenerateInitialRoutes: buildInitialRoutes,
-    onUnknownRoute: buildUnknownRoute,
-    builder: clampTextScale,
-    theme: buildAppTheme(),
+  final themeController = Get.isRegistered<ThemeController>()
+      ? Get.find<ThemeController>()
+      : Get.put(ThemeController(), permanent: true);
+
+  return Obx(
+    () => MaterialApp(
+      title: 'GitHub 探索',
+      debugShowCheckedModeBanner: false,
+      routes: getRootRoutes(),
+      onGenerateRoute: buildRoute,
+      onGenerateInitialRoutes: buildInitialRoutes,
+      onUnknownRoute: buildUnknownRoute,
+      builder: clampTextScale,
+      theme: buildAppTheme(brightness: Brightness.light),
+      darkTheme: buildAppTheme(brightness: Brightness.dark),
+      themeMode: themeController.themeMode.value,
+    ),
   );
 }
 
@@ -78,17 +88,64 @@ Route<dynamic> buildUnknownRoute(RouteSettings settings) {
   );
 }
 
-/// 构造全局 Material 主题，确保未显式设色的基础控件风格统一
-ThemeData buildAppTheme() {
-  final colorScheme = ColorScheme.fromSeed(
-    seedColor: AppColors.primary,
-    primary: AppColors.primary,
-  );
+/// 构造全局 Material 主题，确保未显式设色的基础控件与自定义色板风格统一
+ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
+  final isDark = brightness == Brightness.dark;
+  final palette = isDark ? AppThemePalette.dark : AppThemePalette.light;
+  final colorScheme =
+      ColorScheme.fromSeed(
+        seedColor: palette.primary,
+        brightness: brightness,
+      ).copyWith(
+        primary: palette.primary,
+        surface: palette.cardBackground,
+        onSurface: palette.textPrimary,
+        outline: palette.divider,
+      );
+
   return ThemeData(
     useMaterial3: true,
+    brightness: brightness,
     colorScheme: colorScheme,
-    scaffoldBackgroundColor: Colors.white,
+    scaffoldBackgroundColor: palette.pageBackground,
+    dividerColor: palette.divider,
+    appBarTheme: AppBarTheme(
+      backgroundColor: palette.cardBackground,
+      foregroundColor: palette.textPrimary,
+      elevation: 0,
+      surfaceTintColor: Colors.transparent,
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: palette.cardBackground,
+      titleTextStyle: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        color: palette.textPrimary,
+      ),
+      contentTextStyle: TextStyle(fontSize: 14, color: palette.textPrimary),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: palette.cardBackground,
+      surfaceTintColor: Colors.transparent,
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: palette.inputFill,
+      selectedColor: palette.brandButtonBg,
+      secondarySelectedColor: palette.brandButtonBg,
+      labelStyle: TextStyle(color: palette.textPrimary, fontSize: 13),
+      secondaryLabelStyle: TextStyle(
+        color: palette.brandButtonFg,
+        fontSize: 13,
+      ),
+      side: BorderSide.none,
+    ),
+    bottomNavigationBarTheme: BottomNavigationBarThemeData(
+      backgroundColor: palette.cardBackground,
+      selectedItemColor: palette.brandDark,
+      unselectedItemColor: palette.textSecondary,
+    ),
     splashFactory: InkSparkle.splashFactory,
+    extensions: [palette],
   );
 }
 
@@ -103,6 +160,21 @@ Map<String, String> _readParams(BuildContext context) {
   return const {};
 }
 
+/// 深链参数校验：必填参数缺失时回落到未知路由页，避免用空参数发起无效请求
+Widget _guardedRoute(
+  Map<String, String> params,
+  List<String> requiredKeys,
+  Widget Function(Map<String, String> params) builder,
+) {
+  final missing = requiredKeys
+      .where((key) => (params[key] ?? '').trim().isEmpty)
+      .toList(growable: false);
+  if (missing.isNotEmpty) {
+    return UnknownRoutePage(location: '缺少参数：${missing.join('、')}');
+  }
+  return builder(params);
+}
+
 /// 静态命名路由映射表（集中注册全部页面与查询参数解包逻辑）
 Map<String, Widget Function(BuildContext)> getRootRoutes() {
   return {
@@ -110,55 +182,91 @@ Map<String, Widget Function(BuildContext)> getRootRoutes() {
     AppRoutes.login: (_) => const LoginPage(),
     AppRoutes.repoDetailPath: (context) {
       final p = _readParams(context);
-      return RepoDetailPage(owner: p['owner'] ?? '', repoName: p['name'] ?? '');
+      return _guardedRoute(
+        p,
+        const ['owner', 'name'],
+        (params) =>
+            RepoDetailPage(owner: params['owner']!, repoName: params['name']!),
+      );
     },
     AppRoutes.repoFilesPath: (context) {
       final p = _readParams(context);
-      return RepoFilesPage(
-        owner: p['owner'] ?? '',
-        repoName: p['name'] ?? '',
-        branch: p['ref'] ?? '',
-        path: p['path'] ?? '',
+      return _guardedRoute(
+        p,
+        const ['owner', 'name'],
+        (params) => RepoFilesPage(
+          owner: params['owner']!,
+          repoName: params['name']!,
+          branch: params['ref'] ?? '',
+          path: params['path'] ?? '',
+        ),
       );
     },
     AppRoutes.repoFileViewPath: (context) {
       final p = _readParams(context);
-      return RepoFileViewPage(
-        owner: p['owner'] ?? '',
-        repoName: p['name'] ?? '',
-        path: p['path'] ?? '',
-        branch: p['ref'] ?? '',
+      return _guardedRoute(
+        p,
+        const ['owner', 'name', 'path'],
+        (params) => RepoFileViewPage(
+          owner: params['owner']!,
+          repoName: params['name']!,
+          path: params['path']!,
+          branch: params['ref'] ?? '',
+        ),
       );
     },
     AppRoutes.repoIssuesPath: (context) {
       final p = _readParams(context);
-      return RepoIssuesPage(owner: p['owner'] ?? '', repoName: p['name'] ?? '');
+      return _guardedRoute(
+        p,
+        const ['owner', 'name'],
+        (params) =>
+            RepoIssuesPage(owner: params['owner']!, repoName: params['name']!),
+      );
     },
     AppRoutes.repoIssueDetailPath: (context) {
       final p = _readParams(context);
-      return RepoIssueDetailPage(
-        owner: p['owner'] ?? '',
-        repoName: p['name'] ?? '',
-        number: int.tryParse(p['number'] ?? '') ?? 0,
+      final number = int.tryParse(p['number'] ?? '') ?? 0;
+      if (number <= 0) {
+        return const UnknownRoutePage(location: '缺少参数：number');
+      }
+      return _guardedRoute(
+        p,
+        const ['owner', 'name'],
+        (params) => RepoIssueDetailPage(
+          owner: params['owner']!,
+          repoName: params['name']!,
+          number: number,
+        ),
       );
     },
     AppRoutes.repoCommitsPath: (context) {
       final p = _readParams(context);
-      return RepoCommitsPage(
-        owner: p['owner'] ?? '',
-        repoName: p['name'] ?? '',
-        branch: p['branch'] ?? '',
+      return _guardedRoute(
+        p,
+        const ['owner', 'name'],
+        (params) => RepoCommitsPage(
+          owner: params['owner']!,
+          repoName: params['name']!,
+          branch: params['branch'] ?? '',
+        ),
       );
     },
     AppRoutes.userDetailPath: (context) {
       final p = _readParams(context);
-      return UserDetailPage(login: p['login'] ?? '');
+      return _guardedRoute(p, const [
+        'login',
+      ], (params) => UserDetailPage(login: params['login']!));
     },
     AppRoutes.userFollowsPath: (context) {
       final p = _readParams(context);
-      return UserFollowsPage(
-        login: p['login'] ?? '',
-        initialTab: p['tab'] ?? 'followers',
+      return _guardedRoute(
+        p,
+        const ['login'],
+        (params) => UserFollowsPage(
+          login: params['login']!,
+          initialTab: params['tab'] ?? 'followers',
+        ),
       );
     },
     AppRoutes.myReposPath: (_) => const MyReposPage(),

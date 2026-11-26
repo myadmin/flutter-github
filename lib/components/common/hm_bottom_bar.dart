@@ -13,13 +13,13 @@ class HmBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: context.appColors.cardBackground,
         boxShadow: [
           BoxShadow(
-            color: AppColors.barShadow,
+            color: context.appColors.barShadow,
             blurRadius: 8,
-            offset: Offset(0, -2),
+            offset: const Offset(0, -2),
           ),
         ],
       ),

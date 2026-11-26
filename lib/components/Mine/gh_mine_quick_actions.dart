@@ -23,16 +23,18 @@ class GhMineQuickActions extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 12),
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appColors.cardBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+        border: Border.all(
+          color: context.appColors.divider.withValues(alpha: 0.6),
+        ),
       ),
       child: Row(
         children: [
           Expanded(
             child: _ActionTile(
               icon: Icons.folder_copy_outlined,
-              color: AppColors.primary,
+              color: context.appColors.primary,
               label: '我的仓库',
               onTap: onMyReposTap,
             ),
@@ -40,7 +42,7 @@ class GhMineQuickActions extends StatelessWidget {
           Expanded(
             child: _ActionTile(
               icon: Icons.star_outline,
-              color: AppColors.starActive,
+              color: context.appColors.starActive,
               label: '我的 Star',
               onTap: onMyStarsTap,
             ),
@@ -48,7 +50,7 @@ class GhMineQuickActions extends StatelessWidget {
           Expanded(
             child: _ActionTile(
               icon: Icons.notifications_none,
-              color: AppColors.merged,
+              color: context.appColors.merged,
               label: '消息通知',
               onTap: onNotificationsTap,
             ),
@@ -56,7 +58,7 @@ class GhMineQuickActions extends StatelessWidget {
           Expanded(
             child: _ActionTile(
               icon: Icons.history,
-              color: AppColors.success,
+              color: context.appColors.success,
               label: '浏览足迹',
               onTap: onFootprintTap,
             ),
@@ -103,7 +105,7 @@ class _ActionTile extends StatelessWidget {
                 child: Icon(icon, color: color, size: 22),
               ),
               const SizedBox(height: 6),
-              Text(label, style: AppTextStyles.bodySmall),
+              Text(label, style: context.bodySmallStyle),
             ],
           ),
         ),

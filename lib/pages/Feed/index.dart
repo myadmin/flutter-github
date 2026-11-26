@@ -77,7 +77,7 @@ class _FeedViewState extends State<FeedView> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.pageBackground,
+      color: context.appColors.pageBackground,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(
@@ -113,13 +113,13 @@ class _FeedViewState extends State<FeedView> {
 
   Widget _buildHeader() {
     return Container(
-      color: Colors.white,
+      color: context.appColors.cardBackground,
       padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
       child: Row(
         children: [
-          const Icon(Icons.rss_feed, color: AppColors.brandDark, size: 22),
+          Icon(Icons.rss_feed, color: context.appColors.brandDark, size: 22),
           const SizedBox(width: 8),
-          const Text('关注动态', style: AppTextStyles.sectionTitle),
+          Text('关注动态', style: context.sectionTitleStyle),
           const Spacer(),
           IconButton(
             onPressed: () {
@@ -202,7 +202,7 @@ class _EventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: context.appColors.cardBackground,
       borderRadius: BorderRadius.circular(AppRadius.card),
       child: InkWell(
         onTap: onRepoTap,
@@ -211,7 +211,9 @@ class _EventCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.card),
-            border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+            border: Border.all(
+              color: context.appColors.divider.withValues(alpha: 0.6),
+            ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -236,11 +238,11 @@ class _EventCard extends StatelessWidget {
                         children: [
                           TextSpan(
                             text: event.actorLogin,
-                            style: AppTextStyles.bodyStrong,
+                            style: context.bodyStrongStyle,
                           ),
                           TextSpan(
                             text: ' ${event.actionText}',
-                            style: AppTextStyles.body,
+                            style: context.bodyStyle,
                           ),
                         ],
                       ),
@@ -251,8 +253,8 @@ class _EventCard extends StatelessWidget {
                         event.repoName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.primary,
+                        style: context.bodySmallStyle.copyWith(
+                          color: context.appColors.primary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -263,14 +265,14 @@ class _EventCard extends StatelessWidget {
                         event.detailText,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.caption,
+                        style: context.captionStyle,
                       ),
                     ],
                     if (event.createdAt != null) ...[
                       const SizedBox(height: 6),
                       Text(
                         formatRelativeTime(event.createdAt),
-                        style: AppTextStyles.captionSmall,
+                        style: context.captionSmallStyle,
                       ),
                     ],
                   ],

@@ -21,10 +21,10 @@ class AppErrorView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
+          Icon(
             Icons.error_outline,
             size: 48,
-            color: AppColors.textSecondary,
+            color: context.appColors.textSecondary,
           ),
           const SizedBox(height: 10),
           Padding(
@@ -32,15 +32,15 @@ class AppErrorView extends StatelessWidget {
             child: Text(
               message,
               textAlign: TextAlign.center,
-              style: AppTextStyles.caption.copyWith(fontSize: 14),
+              style: context.captionStyle.copyWith(fontSize: 14),
             ),
           ),
           const SizedBox(height: 20),
           OutlinedButton(
             onPressed: onRetry,
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.brandDark,
-              side: const BorderSide(color: AppColors.brandDark),
+              foregroundColor: context.appColors.brandDark,
+              side: BorderSide(color: context.appColors.brandDark),
               shape: const StadiumBorder(),
             ),
             child: Text(retryText),

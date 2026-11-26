@@ -132,7 +132,8 @@ class _UserDetailPageState extends State<UserDetailPage> {
     if (!_userController.isLoggedIn) {
       ToastUtils.showToast(context, '登录后即可关注开发者');
       await Navigator.pushNamed(context, AppRoutes.login);
-      return;
+      // 登录成功后自动续做关注操作
+      if (!mounted || !_userController.isLoggedIn) return;
     }
     final prev = _isFollowing;
     setState(() {
@@ -168,12 +169,12 @@ class _UserDetailPageState extends State<UserDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
         title: Text(widget.login.isEmpty ? '用户主页' : widget.login),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.pageBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
       ),
       body: _buildBody(),
@@ -231,9 +232,11 @@ class _UserDetailPageState extends State<UserDetailPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appColors.cardBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+        border: Border.all(
+          color: context.appColors.divider.withValues(alpha: 0.6),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,9 +255,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(user.displayName, style: AppTextStyles.sectionTitle),
+                    Text(user.displayName, style: context.sectionTitleStyle),
                     const SizedBox(height: 2),
-                    Text('@${user.login}', style: AppTextStyles.caption),
+                    Text('@${user.login}', style: context.captionStyle),
                   ],
                 ),
               ),
@@ -263,15 +266,15 @@ class _UserDetailPageState extends State<UserDetailPage> {
                   onPressed: _followPending ? null : _toggleFollow,
                   style: OutlinedButton.styleFrom(
                     backgroundColor: _isFollowing
-                        ? AppColors.primarySurface
-                        : Colors.white,
+                        ? context.appColors.primarySurface
+                        : context.appColors.cardBackground,
                     foregroundColor: _isFollowing
-                        ? AppColors.primary
-                        : AppColors.brandDark,
+                        ? context.appColors.primary
+                        : context.appColors.brandDark,
                     side: BorderSide(
                       color: _isFollowing
-                          ? AppColors.primary
-                          : AppColors.divider,
+                          ? context.appColors.primary
+                          : context.appColors.divider,
                     ),
                     shape: const StadiumBorder(),
                   ),
@@ -281,7 +284,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
           ),
           if (user.bio.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Text(user.bio, style: AppTextStyles.bodySmall),
+            Text(user.bio, style: context.bodySmallStyle),
           ],
           if (user.company.isNotEmpty || user.location.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -304,7 +307,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
             children: [
               Text(
                 '公开仓库 ${formatCompactNumber(user.publicRepos)}',
-                style: AppTextStyles.caption,
+                style: context.captionStyle,
               ),
               const SizedBox(width: 14),
               InkWell(
@@ -314,8 +317,8 @@ class _UserDetailPageState extends State<UserDetailPage> {
                 ),
                 child: Text(
                   'Followers ${formatCompactNumber(user.followers)}',
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.primary,
+                  style: context.captionStyle.copyWith(
+                    color: context.appColors.primary,
                   ),
                 ),
               ),
@@ -327,8 +330,8 @@ class _UserDetailPageState extends State<UserDetailPage> {
                 ),
                 child: Text(
                   'Following ${formatCompactNumber(user.following)}',
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.primary,
+                  style: context.captionStyle.copyWith(
+                    color: context.appColors.primary,
                   ),
                 ),
               ),
@@ -417,9 +420,9 @@ class _MetaRow extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: AppColors.textSecondary),
+        Icon(icon, size: 14, color: context.appColors.textSecondary),
         const SizedBox(width: 4),
-        Text(text, style: AppTextStyles.caption),
+        Text(text, style: context.captionStyle),
       ],
     );
   }

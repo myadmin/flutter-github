@@ -22,7 +22,7 @@ import 'package:gh_explorer/stores/user_controller.dart';
 import 'package:gh_explorer/utils/api_exception.dart';
 import 'package:gh_explorer/utils/formatters.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:gh_explorer/utils/external_link.dart';
 
 /// 仓库详情页：概览信息、Star 互动、代码/Issue/Commit 入口与 README 渲染
 class RepoDetailPage extends StatefulWidget {
@@ -147,10 +147,11 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
   }
 
   /// 使用外部浏览器打开 GitHub 仓库或项目主页链接
+  ///
+  /// homepage / htmlUrl 均来自 GitHub 返回的仓库元数据，可能是任意 scheme，
+  /// 统一走 [openExternalUrl] 的白名单校验，避免被 `intent:` 等协议唤起。
   Future<void> _openInBrowser(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final opened = await openExternalUrl(url);
     if (!opened && mounted) {
       ToastUtils.showToast(context, '无法在浏览器中打开');
     }
@@ -160,12 +161,12 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
   Widget build(BuildContext context) {
     final title = _hasValidArgs ? '${widget.owner}/${widget.repoName}' : '项目详情';
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.pageBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
         actions: [
           if (_repo != null && _repo!.htmlUrl.isNotEmpty)
@@ -222,9 +223,11 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appColors.cardBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+        border: Border.all(
+          color: context.appColors.divider.withValues(alpha: 0.6),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,20 +253,20 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
                     const SizedBox(width: 8),
                     Text(
                       repo.ownerLogin,
-                      style: AppTextStyles.bodyStrong.copyWith(
-                        color: AppColors.primary,
+                      style: context.bodyStrongStyle.copyWith(
+                        color: context.appColors.primary,
                       ),
                     ),
                   ],
                 ),
               ),
-              const Text(' / ', style: AppTextStyles.body),
+              Text(' / ', style: context.bodyStyle),
               Expanded(
                 child: Text(
                   repo.repoName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.sectionTitle,
+                  style: context.sectionTitleStyle,
                 ),
               ),
             ],
@@ -299,7 +302,7 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
             const SizedBox(height: 12),
             Text(
               repo.description,
-              style: AppTextStyles.body.copyWith(height: 1.5),
+              style: context.bodyStyle.copyWith(height: 1.5),
             ),
           ],
           if (repo.topics.isNotEmpty) ...[
@@ -315,13 +318,13 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.primarySurface,
+                      color: context.appColors.primarySurface,
                       borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                     child: Text(
                       topic,
-                      style: AppTextStyles.captionSmall.copyWith(
-                        color: AppColors.primary,
+                      style: context.captionSmallStyle.copyWith(
+                        color: context.appColors.primary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -348,7 +351,7 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
               if (repo.pushedAt != null)
                 Text(
                   '最近提交 ${formatRelativeTime(repo.pushedAt)}',
-                  style: AppTextStyles.captionSmall,
+                  style: context.captionSmallStyle,
                 ),
             ],
           ),
@@ -370,8 +373,8 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
                   child: OutlinedButton.icon(
                     onPressed: () => _openInBrowser(repo.homepage),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textPrimary,
-                      side: const BorderSide(color: AppColors.divider),
+                      foregroundColor: context.appColors.textPrimary,
+                      side: BorderSide(color: context.appColors.divider),
                       shape: const StadiumBorder(),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -392,13 +395,15 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
 
   Widget _buildNavigationCard(RepoItem repo) {
     return Material(
-      color: Colors.white,
+      color: context.appColors.cardBackground,
       borderRadius: BorderRadius.circular(AppRadius.card),
       clipBehavior: Clip.antiAlias,
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.card),
-          border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+          border: Border.all(
+            color: context.appColors.divider.withValues(alpha: 0.6),
+          ),
         ),
         child: Column(
           children: [
@@ -415,7 +420,7 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
                 ),
               ),
             ),
-            const Divider(height: 1, color: AppColors.divider),
+            Divider(height: 1, color: context.appColors.divider),
             _NavRow(
               icon: Icons.adjust,
               title: 'Issues 与 Pull Requests',
@@ -425,7 +430,7 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
                 AppRoutes.repoIssues(repo.ownerLogin, repo.repoName),
               ),
             ),
-            const Divider(height: 1, color: AppColors.divider),
+            Divider(height: 1, color: context.appColors.divider),
             _NavRow(
               icon: Icons.commit,
               title: '提交历史 (Commits)',
@@ -449,26 +454,28 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appColors.cardBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+        border: Border.all(
+          color: context.appColors.divider.withValues(alpha: 0.6),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.menu_book_outlined, size: 18),
-              SizedBox(width: 6),
-              Text('README.md', style: AppTextStyles.sectionTitle),
+              const Icon(Icons.menu_book_outlined, size: 18),
+              const SizedBox(width: 6),
+              Text('README.md', style: context.sectionTitleStyle),
             ],
           ),
-          const Divider(height: 20, color: AppColors.divider),
+          Divider(height: 20, color: context.appColors.divider),
           if (_readme.trim().isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
               child: Center(
-                child: Text('该项目暂无 README 文档', style: AppTextStyles.caption),
+                child: Text('该项目暂无 README 文档', style: context.captionStyle),
               ),
             )
           else
@@ -496,15 +503,15 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppColors.inputFill,
+        color: context.appColors.inputFill,
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: AppColors.textSecondary),
+          Icon(icon, size: 12, color: context.appColors.textSecondary),
           const SizedBox(width: 4),
-          Text(label, style: AppTextStyles.captionSmall),
+          Text(label, style: context.captionSmallStyle),
         ],
       ),
     );
@@ -523,9 +530,9 @@ class _MetricText extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: AppColors.textSecondary),
+        Icon(icon, size: 14, color: context.appColors.textSecondary),
         const SizedBox(width: 4),
-        Text(label, style: AppTextStyles.caption),
+        Text(label, style: context.captionStyle),
       ],
     );
   }
@@ -548,14 +555,14 @@ class _NavRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, size: 20, color: AppColors.brandDark),
-      title: Text(title, style: AppTextStyles.bodyStrong),
+      leading: Icon(icon, size: 20, color: context.appColors.brandDark),
+      title: Text(title, style: context.bodyStrongStyle),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(trailingText, style: AppTextStyles.caption),
+          Text(trailingText, style: context.captionStyle),
           const SizedBox(width: 4),
-          const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+          Icon(Icons.chevron_right, color: context.appColors.textSecondary),
         ],
       ),
       onTap: onTap,

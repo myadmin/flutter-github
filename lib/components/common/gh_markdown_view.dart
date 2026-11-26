@@ -4,7 +4,7 @@ import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/utils/formatters.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:gh_explorer/utils/external_link.dart';
 
 /// GitHub 风格 Markdown 渲染组件（README / Issue 正文与评论共用）
 class GhMarkdownView extends StatelessWidget {
@@ -29,21 +29,20 @@ class GhMarkdownView extends StatelessWidget {
     String title,
   ) async {
     if (href == null || href.trim().isEmpty) return;
-    final uri = Uri.tryParse(href.trim());
-    if (uri == null ||
-        (uri.scheme != 'http' &&
-            uri.scheme != 'https' &&
-            uri.scheme != 'mailto')) {
-      return;
-    }
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    // 仅放行 http/https/mailto，杜绝 javascript:、intent: 等协议注入
+    final opened = await openExternalUrl(href);
     if (!opened && context.mounted) {
       ToastUtils.showToast(context, '无法打开链接');
     }
   }
 
   /// 自定义图片构建器：补全仓库相对路径，并为不支持的 SVG 徽章提供文本胶囊降级
-  Widget _buildImage(Uri uri, String? title, String? alt) {
+  Widget _buildImage(
+    BuildContext context,
+    Uri uri,
+    String? title,
+    String? alt,
+  ) {
     final raw = uri.toString();
     final resolved = (owner.isNotEmpty && repo.isNotEmpty)
         ? resolveRepoAssetUrl(raw, owner: owner, repo: repo, branch: branch)
@@ -61,11 +60,11 @@ class GhMarkdownView extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: AppColors.inputFill,
+          color: context.appColors.inputFill,
           borderRadius: BorderRadius.circular(AppRadius.small),
-          border: Border.all(color: AppColors.divider),
+          border: Border.all(color: context.appColors.divider),
         ),
-        child: Text(badgeLabel, style: AppTextStyles.captionSmall),
+        child: Text(badgeLabel, style: context.captionSmallStyle),
       );
     }
 
@@ -77,12 +76,12 @@ class GhMarkdownView extends StatelessWidget {
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: AppColors.imagePlaceholder,
+              color: context.appColors.imagePlaceholder,
               borderRadius: BorderRadius.circular(AppRadius.small),
             ),
             child: Text(
               alt != null && alt.isNotEmpty ? '[图片: $alt]' : '[图片加载失败]',
-              style: AppTextStyles.caption,
+              style: context.captionStyle,
             ),
           );
         },
@@ -98,24 +97,26 @@ class GhMarkdownView extends StatelessWidget {
       selectable: true,
       onTapLink: (text, href, title) =>
           _handleLinkTap(context, text, href, title),
-      imageBuilder: _buildImage,
+      imageBuilder: (uri, title, alt) => _buildImage(context, uri, title, alt),
       styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-        p: AppTextStyles.body.copyWith(height: 1.55),
-        h1: AppTextStyles.pageTitle.copyWith(fontSize: 20, height: 1.4),
-        h2: AppTextStyles.sectionTitle.copyWith(fontSize: 18, height: 1.4),
-        h3: AppTextStyles.sectionTitle.copyWith(fontSize: 16, height: 1.4),
-        a: const TextStyle(color: AppColors.link),
-        code: AppTextStyles.mono.copyWith(
-          backgroundColor: AppColors.codeBackground,
+        p: context.bodyStyle.copyWith(height: 1.55),
+        h1: context.pageTitleStyle.copyWith(fontSize: 20, height: 1.4),
+        h2: context.sectionTitleStyle.copyWith(fontSize: 18, height: 1.4),
+        h3: context.sectionTitleStyle.copyWith(fontSize: 16, height: 1.4),
+        a: TextStyle(color: context.appColors.link),
+        code: context.monoStyle.copyWith(
+          backgroundColor: context.appColors.codeBackground,
           fontSize: 12.5,
         ),
         codeblockDecoration: BoxDecoration(
-          color: AppColors.codeBackground,
+          color: context.appColors.codeBackground,
           borderRadius: BorderRadius.circular(AppRadius.small),
-          border: Border.all(color: AppColors.divider),
+          border: Border.all(color: context.appColors.divider),
         ),
-        blockquoteDecoration: const BoxDecoration(
-          border: Border(left: BorderSide(color: AppColors.divider, width: 3)),
+        blockquoteDecoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(color: context.appColors.divider, width: 3),
+          ),
         ),
       ),
     );

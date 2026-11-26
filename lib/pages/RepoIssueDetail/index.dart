@@ -38,6 +38,10 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
 
   IssueItem? _issue;
   List<IssueComment> _comments = const [];
+  int _commentsPage = 0;
+  bool _commentsLoading = false;
+  bool _commentsHasMore = false;
+  String _commentsError = '';
   bool _isLoading = true;
   bool _submitting = false;
   String _errorMessage = '';
@@ -63,28 +67,90 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
     super.dispose();
   }
 
-  /// 并发加载 Issue 主体详情与评论列表
+  /// 加载 Issue 主体详情，主体成功后再异步加载评论
+  ///
+  /// 评论接口需要额外权限（私有仓库或限流时容易 403），因此与主体解耦：
+  /// 主体失败显示整页错误，评论失败只影响评论区并允许单独重试。
   Future<void> _load() async {
     setState(() {
       _isLoading = _issue == null;
       _errorMessage = '';
     });
     try {
-      final (issue, commentsPage) = await (
-        getRepoIssueDetailAPI(widget.owner, widget.repoName, widget.number),
-        getIssueCommentsAPI(widget.owner, widget.repoName, widget.number),
-      ).wait;
+      final issue = await getRepoIssueDetailAPI(
+        widget.owner,
+        widget.repoName,
+        widget.number,
+      );
       if (!mounted) return;
       setState(() {
         _issue = issue;
-        _comments = commentsPage.items;
         _isLoading = false;
       });
+      await _reloadComments();
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
         _errorMessage = resolveErrorMessage(e, fallback: '加载 Issue 详情失败');
+      });
+    }
+  }
+
+  /// 重新加载第一页评论（下拉刷新、发送评论后复用）
+  Future<void> _reloadComments() async {
+    if (_commentsLoading) return;
+    setState(() {
+      _commentsLoading = true;
+      _commentsError = '';
+    });
+    try {
+      final page = await getIssueCommentsAPI(
+        widget.owner,
+        widget.repoName,
+        widget.number,
+        page: 1,
+      );
+      if (!mounted) return;
+      setState(() {
+        _comments = page.items;
+        _commentsPage = 1;
+        _commentsHasMore = page.hasMore;
+        _commentsLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _commentsLoading = false;
+        _commentsError = resolveErrorMessage(e, fallback: '评论加载失败');
+      });
+    }
+  }
+
+  /// 加载下一页评论并追加到列表尾部
+  Future<void> _loadMoreComments() async {
+    if (_commentsLoading || !_commentsHasMore) return;
+    final nextPage = _commentsPage + 1;
+    setState(() => _commentsLoading = true);
+    try {
+      final page = await getIssueCommentsAPI(
+        widget.owner,
+        widget.repoName,
+        widget.number,
+        page: nextPage,
+      );
+      if (!mounted) return;
+      setState(() {
+        _comments = [..._comments, ...page.items];
+        _commentsPage = nextPage;
+        _commentsHasMore = page.hasMore;
+        _commentsLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _commentsLoading = false;
+        _commentsError = resolveErrorMessage(e, fallback: '评论加载失败');
       });
     }
   }
@@ -127,12 +193,12 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
         title: Text(_hasValidArgs ? '#${widget.number}' : 'Issue 详情'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.pageBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
       ),
       body: _buildBody(),
@@ -150,9 +216,9 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
                         hintText: _userController.isLoggedIn
                             ? '写下你的评论（支持 Markdown）...'
                             : '登录后可发表评论',
-                        hintStyle: AppTextStyles.caption,
+                        hintStyle: context.captionStyle,
                         filled: true,
-                        fillColor: AppColors.inputFill,
+                        fillColor: context.appColors.inputFill,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 8,
@@ -168,18 +234,18 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
                   ElevatedButton(
                     onPressed: _submitting ? null : _submitComment,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.brandDark,
-                      foregroundColor: Colors.white,
+                      backgroundColor: context.appColors.brandButtonBg,
+                      foregroundColor: context.appColors.brandButtonFg,
                       elevation: 0,
                       shape: const StadiumBorder(),
                     ),
                     child: _submitting
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 16,
                             height: 16,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.white,
+                              color: context.appColors.brandButtonFg,
                             ),
                           )
                         : const Text('发送'),
@@ -215,16 +281,16 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: context.appColors.cardBackground,
                   borderRadius: BorderRadius.circular(AppRadius.card),
                   border: Border.all(
-                    color: AppColors.divider.withValues(alpha: 0.6),
+                    color: context.appColors.divider.withValues(alpha: 0.6),
                   ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(issue.title, style: AppTextStyles.sectionTitle),
+                    Text(issue.title, style: context.sectionTitleStyle),
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -235,16 +301,16 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
                           ),
                           decoration: BoxDecoration(
                             color: isOpen
-                                ? AppColors.successSurface
-                                : AppColors.mergedSurface,
+                                ? context.appColors.successSurface
+                                : context.appColors.mergedSurface,
                             borderRadius: BorderRadius.circular(AppRadius.pill),
                           ),
                           child: Text(
                             isOpen ? 'Open' : 'Closed',
-                            style: AppTextStyles.captionSmall.copyWith(
+                            style: context.captionSmallStyle.copyWith(
                               color: isOpen
-                                  ? AppColors.success
-                                  : AppColors.merged,
+                                  ? context.appColors.success
+                                  : context.appColors.merged,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -252,12 +318,12 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
                         const SizedBox(width: 8),
                         Text(
                           '${issue.user.login} 创建于 ${formatRelativeTime(issue.createdAt)}',
-                          style: AppTextStyles.caption,
+                          style: context.captionStyle,
                         ),
                       ],
                     ),
                     if (issue.body.trim().isNotEmpty) ...[
-                      const Divider(height: 20, color: AppColors.divider),
+                      Divider(height: 20, color: context.appColors.divider),
                       GhMarkdownView(
                         data: issue.body,
                         owner: widget.owner,
@@ -271,20 +337,42 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 child: Text(
-                  '评论 (${_comments.length})',
-                  style: AppTextStyles.bodyStrong,
+                  '评论 (${_comments.length}${_commentsHasMore ? '+' : ''})',
+                  style: context.bodyStrongStyle,
                 ),
               ),
               const SizedBox(height: 6),
-              if (_comments.isEmpty)
+              if (_commentsError.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: context.appColors.cardBackground,
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _commentsError,
+                          style: context.captionStyle,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _reloadComments,
+                        child: const Text('重试'),
+                      ),
+                    ],
+                  ),
+                )
+              else if (_comments.isEmpty && !_commentsLoading)
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: context.appColors.cardBackground,
                     borderRadius: BorderRadius.circular(AppRadius.card),
                   ),
-                  child: const Center(
-                    child: Text('暂无评论', style: AppTextStyles.caption),
+                  child: Center(
+                    child: Text('暂无评论', style: context.captionStyle),
                   ),
                 )
               else
@@ -296,6 +384,27 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
                   ),
                   const SizedBox(height: 10),
                 ],
+              if (_commentsLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                )
+              else if (_commentsHasMore)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Center(
+                    child: OutlinedButton(
+                      onPressed: _loadMoreComments,
+                      child: const Text('加载更多评论'),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -321,9 +430,11 @@ class _CommentCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appColors.cardBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+        border: Border.all(
+          color: context.appColors.divider.withValues(alpha: 0.6),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -338,11 +449,11 @@ class _CommentCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               const SizedBox(width: 8),
-              Text(comment.user.login, style: AppTextStyles.bodyStrong),
+              Text(comment.user.login, style: context.bodyStrongStyle),
               const Spacer(),
               Text(
                 formatRelativeTime(comment.createdAt),
-                style: AppTextStyles.captionSmall,
+                style: context.captionSmallStyle,
               ),
             ],
           ),

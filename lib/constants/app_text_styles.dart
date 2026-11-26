@@ -76,3 +76,39 @@ abstract final class AppTextStyles {
     color: AppColors.textSecondary,
   );
 }
+
+/// 根据当前明/暗主题上下文自动映射字体颜色的快捷样式扩展
+extension AppThemedTextContext on BuildContext {
+  TextStyle get captionStyle =>
+      AppTextStyles.caption.copyWith(color: appColors.textSecondary);
+
+  TextStyle get captionSmallStyle =>
+      AppTextStyles.captionSmall.copyWith(color: appColors.textSecondary);
+
+  TextStyle get labelStyle =>
+      AppTextStyles.label.copyWith(color: appColors.textSecondary);
+
+  TextStyle get bodyStyle =>
+      AppTextStyles.body.copyWith(color: appColors.textPrimary);
+
+  TextStyle get bodyStrongStyle =>
+      AppTextStyles.bodyStrong.copyWith(color: appColors.textPrimary);
+
+  TextStyle get bodySmallStyle =>
+      AppTextStyles.bodySmall.copyWith(color: appColors.textPrimary);
+
+  TextStyle get tileTitleStyle =>
+      AppTextStyles.tileTitle.copyWith(color: appColors.textPrimary);
+
+  TextStyle get pageTitleStyle =>
+      AppTextStyles.pageTitle.copyWith(color: appColors.textPrimary);
+
+  TextStyle get sectionTitleStyle =>
+      AppTextStyles.sectionTitle.copyWith(color: appColors.textPrimary);
+
+  TextStyle get monoStyle =>
+      AppTextStyles.mono.copyWith(color: appColors.textPrimary);
+
+  TextStyle get monoSmallStyle =>
+      AppTextStyles.monoSmall.copyWith(color: appColors.textSecondary);
+}

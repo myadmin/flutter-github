@@ -38,7 +38,7 @@ class _ExploreSkeletonState extends State<ExploreSkeleton>
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: AppColors.imagePlaceholder,
+        color: context.appColors.imagePlaceholder,
         borderRadius: BorderRadius.circular(radius),
       ),
     );
@@ -48,9 +48,11 @@ class _ExploreSkeletonState extends State<ExploreSkeleton>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appColors.cardBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.divider.withValues(alpha: 0.5)),
+        border: Border.all(
+          color: context.appColors.divider.withValues(alpha: 0.5),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -98,7 +100,7 @@ class _ExploreSkeletonState extends State<ExploreSkeleton>
               height: 82,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.appColors.cardBackground,
                 borderRadius: BorderRadius.circular(AppRadius.card),
               ),
               child: Row(

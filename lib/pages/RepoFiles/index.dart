@@ -32,6 +32,7 @@ class _RepoFilesPageState extends State<RepoFilesPage> {
   List<RepoContentItem> _items = const [];
   List<RepoBranch> _branches = const [];
   late String _currentBranch;
+  int _loadSeq = 0;
   bool _isLoading = true;
   String _errorMessage = '';
 
@@ -51,6 +52,8 @@ class _RepoFilesPageState extends State<RepoFilesPage> {
       });
       return;
     }
+    // 请求序号：快速切换分支时，只有最后一次请求的结果可以写回界面
+    final seq = ++_loadSeq;
     setState(() {
       _isLoading = true;
       _errorMessage = '';
@@ -64,21 +67,21 @@ class _RepoFilesPageState extends State<RepoFilesPage> {
       );
       // 首次进入时加载分支列表，切换分支后复用已拉取的分支选项
       final branchesFuture = _branches.isEmpty
-          ? getRepoBranchesAPI(
+          ? getAllRepoBranchesAPI(
               widget.owner,
               widget.repoName,
             ).catchError((Object _) => const <RepoBranch>[])
           : Future<List<RepoBranch>>.value(_branches);
 
       final (items, branches) = await (contentsFuture, branchesFuture).wait;
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
       setState(() {
         _items = items;
         _branches = branches;
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
       setState(() {
         _isLoading = false;
         _errorMessage = resolveErrorMessage(e, fallback: '加载目录内容失败');
@@ -104,12 +107,12 @@ class _RepoFilesPageState extends State<RepoFilesPage> {
   Widget build(BuildContext context) {
     final title = widget.path.isEmpty ? '${widget.repoName} 代码' : widget.path;
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.pageBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
         actions: [
           if (_branches.isNotEmpty)
@@ -133,7 +136,7 @@ class _RepoFilesPageState extends State<RepoFilesPage> {
                     const SizedBox(width: 4),
                     Text(
                       _currentBranch.isEmpty ? '默认分支' : _currentBranch,
-                      style: AppTextStyles.bodySmall,
+                      style: context.bodySmallStyle,
                     ),
                   ],
                 ),
@@ -169,13 +172,13 @@ class _RepoFilesPageState extends State<RepoFilesPage> {
             itemBuilder: (context, index) {
               final item = _items[index];
               return Material(
-                color: Colors.white,
+                color: context.appColors.cardBackground,
                 borderRadius: BorderRadius.circular(AppRadius.small),
                 child: ListTile(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(AppRadius.small),
                     side: BorderSide(
-                      color: AppColors.divider.withValues(alpha: 0.5),
+                      color: context.appColors.divider.withValues(alpha: 0.5),
                     ),
                   ),
                   leading: Icon(
@@ -183,18 +186,18 @@ class _RepoFilesPageState extends State<RepoFilesPage> {
                         ? Icons.folder
                         : Icons.insert_drive_file_outlined,
                     color: item.isDir
-                        ? AppColors.primary
-                        : AppColors.textSecondary,
+                        ? context.appColors.primary
+                        : context.appColors.textSecondary,
                   ),
-                  title: Text(item.name, style: AppTextStyles.body),
+                  title: Text(item.name, style: context.bodyStyle),
                   trailing: item.isDir
-                      ? const Icon(
+                      ? Icon(
                           Icons.chevron_right,
-                          color: AppColors.textSecondary,
+                          color: context.appColors.textSecondary,
                         )
                       : Text(
                           _formatSize(item.size),
-                          style: AppTextStyles.captionSmall,
+                          style: context.captionSmallStyle,
                         ),
                   onTap: () {
                     if (item.isDir) {

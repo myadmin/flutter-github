@@ -113,12 +113,12 @@ class _RepoFileViewPageState extends State<RepoFileViewPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
         title: Text(_fileName, maxLines: 1, overflow: TextOverflow.ellipsis),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.pageBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
         actions: [
           if (_isMarkdownFile && _content.isNotEmpty)
@@ -174,7 +174,7 @@ class _RepoFileViewPageState extends State<RepoFileViewPage> {
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.appColors.cardBackground,
                 borderRadius: BorderRadius.circular(AppRadius.card),
               ),
               child: GhMarkdownView(

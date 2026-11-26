@@ -88,20 +88,20 @@ class _FootprintPageState extends State<FootprintPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
         title: const Text('浏览足迹'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.pageBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
         actions: [
           if (_items.isNotEmpty)
             TextButton(
               onPressed: _clear,
-              child: const Text(
+              child: Text(
                 '清空',
-                style: TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appColors.textSecondary),
               ),
             ),
         ],
@@ -141,7 +141,7 @@ class _FootprintPageState extends State<FootprintPage> {
                 padding: const EdgeInsets.fromLTRB(2, 6, 2, 8),
                 child: Text(
                   group.title,
-                  style: AppTextStyles.caption.copyWith(
+                  style: context.captionStyle.copyWith(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -156,12 +156,12 @@ class _FootprintPageState extends State<FootprintPage> {
                 const SizedBox(height: 10),
               ],
             ],
-            const Padding(
-              padding: EdgeInsets.only(top: 6),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
               child: Text(
                 '足迹仅保存在本机，最多保留 ${FootprintStore.maxItems} 条',
                 textAlign: TextAlign.center,
-                style: AppTextStyles.captionSmall,
+                style: context.captionSmallStyle,
               ),
             ),
           ],
@@ -189,7 +189,7 @@ class _FootprintTile extends StatelessWidget {
       child: Semantics(
         button: true,
         child: Material(
-          color: Colors.white,
+          color: context.appColors.cardBackground,
           borderRadius: BorderRadius.circular(AppRadius.card),
           child: InkWell(
             onTap: onTap,
@@ -199,7 +199,7 @@ class _FootprintTile extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(AppRadius.card),
                 border: Border.all(
-                  color: AppColors.divider.withValues(alpha: 0.6),
+                  color: context.appColors.divider.withValues(alpha: 0.6),
                 ),
               ),
               child: Row(
@@ -221,8 +221,8 @@ class _FootprintTile extends StatelessWidget {
                           item.fullName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.tileTitle.copyWith(
-                            color: AppColors.primary,
+                          style: context.tileTitleStyle.copyWith(
+                            color: context.appColors.primary,
                           ),
                         ),
                         if (item.description.isNotEmpty) ...[
@@ -231,7 +231,7 @@ class _FootprintTile extends StatelessWidget {
                             item.description,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.caption,
+                            style: context.captionStyle,
                           ),
                         ],
                         const SizedBox(height: 6),
@@ -244,19 +244,19 @@ class _FootprintTile extends StatelessWidget {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.star_border,
                                   size: 14,
-                                  color: AppColors.textSecondary,
+                                  color: context.appColors.textSecondary,
                                 ),
                                 const SizedBox(width: 3),
                                 Text(
                                   formatCompactNumber(item.stargazersCount),
-                                  style: AppTextStyles.captionSmall,
+                                  style: context.captionSmallStyle,
                                 ),
                               ],
                             ),
-                            Text(timeText, style: AppTextStyles.captionSmall),
+                            Text(timeText, style: context.captionSmallStyle),
                           ],
                         ),
                       ],

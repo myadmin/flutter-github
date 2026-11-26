@@ -6,9 +6,10 @@ import 'package:gh_explorer/components/common/hm_bottom_bar.dart';
 import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/stores/explore_tags_controller.dart';
+import 'package:gh_explorer/stores/theme_controller.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
 
-/// 应用设置页：支持自定义探索首页顶部展示的标签、首位「全部」开关及展示顺序
+/// 应用设置页：支持外观主题色切换及探索首页顶部标签自定义
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
@@ -23,11 +24,16 @@ class _SettingsPageState extends State<SettingsPage> {
       Get.isRegistered<ExploreTagsController>()
       ? Get.find<ExploreTagsController>()
       : Get.put(ExploreTagsController(), permanent: true);
+  late final ThemeController _themeController =
+      Get.isRegistered<ThemeController>()
+      ? Get.find<ThemeController>()
+      : Get.put(ThemeController(), permanent: true);
 
   @override
   void initState() {
     super.initState();
     unawaited(_tagsController.ensureLoaded());
+    unawaited(_themeController.ensureLoaded());
   }
 
   @override
@@ -68,22 +74,29 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _selectThemeMode(ThemeMode mode) async {
+    await _themeController.setThemeMode(mode);
+  }
+
   Future<void> _resetDefaults() async {
-    await _tagsController.resetDefaults();
+    await Future.wait([
+      _tagsController.resetDefaults(),
+      _themeController.resetDefault(),
+    ]);
     if (mounted) {
-      ToastUtils.showToast(context, '已恢复默认首页标签');
+      ToastUtils.showToast(context, '已恢复默认设置');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
         title: const Text('设置'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.cardBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
         actions: [
           TextButton(onPressed: _resetDefaults, child: const Text('恢复默认')),
@@ -95,6 +108,7 @@ class _SettingsPageState extends State<SettingsPage> {
             maxWidth: HmBottomBar.maxContentWidth,
           ),
           child: Obx(() {
+            final themeMode = _themeController.themeMode.value;
             final displayTags = _tagsController.displayTags;
             final selectedTags = _tagsController.selectedTags.toList();
             final availableTags = _tagsController.availableTags;
@@ -104,6 +118,8 @@ class _SettingsPageState extends State<SettingsPage> {
             return ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
               children: [
+                _buildThemeCard(themeMode),
+                const SizedBox(height: AppSpacing.module),
                 _buildPreviewCard(displayTags),
                 const SizedBox(height: AppSpacing.module),
                 _buildShowAllCard(showAll),
@@ -127,11 +143,141 @@ class _SettingsPageState extends State<SettingsPage> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appColors.cardBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+        border: Border.all(
+          color: context.appColors.divider.withValues(alpha: 0.6),
+        ),
       ),
       child: child,
+    );
+  }
+
+  Widget _buildThemeCard(ThemeMode currentMode) {
+    final platformBrightness = MediaQuery.platformBrightnessOf(context);
+    final options = <(ThemeMode, String, IconData)>[
+      (
+        ThemeMode.system,
+        ThemeController.labelOf(ThemeMode.system),
+        Icons.brightness_auto_outlined,
+      ),
+      (
+        ThemeMode.light,
+        ThemeController.labelOf(ThemeMode.light),
+        Icons.light_mode_outlined,
+      ),
+      (
+        ThemeMode.dark,
+        ThemeController.labelOf(ThemeMode.dark),
+        Icons.dark_mode_outlined,
+      ),
+    ];
+
+    return _buildCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.palette_outlined,
+                size: 18,
+                color: context.appColors.primary,
+              ),
+              const SizedBox(width: 6),
+              Expanded(child: Text('外观主题色', style: context.bodyStrongStyle)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: context.appColors.primarySurface,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+                child: Text(
+                  ThemeController.labelOf(currentMode),
+                  style: context.captionSmallStyle.copyWith(
+                    color: context.appColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _themeController.descriptionFor(platformBrightness),
+            style: context.captionSmallStyle,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (var i = 0; i < options.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                Expanded(
+                  child: _buildThemeOption(
+                    mode: options[i].$1,
+                    label: options[i].$2,
+                    icon: options[i].$3,
+                    selected: currentMode == options[i].$1,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThemeOption({
+    required ThemeMode mode,
+    required String label,
+    required IconData icon,
+    required bool selected,
+  }) {
+    final colors = context.appColors;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '主题模式：$label',
+      child: Material(
+        color: selected ? colors.brandButtonBg : colors.inputFill,
+        borderRadius: BorderRadius.circular(AppRadius.image),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _selectThemeMode(mode),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.image),
+              border: Border.all(
+                color: selected
+                    ? colors.brandButtonBg
+                    : colors.divider.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: selected ? colors.brandButtonFg : colors.textPrimary,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.captionSmallStyle.copyWith(
+                    color: selected ? colors.brandButtonFg : colors.textPrimary,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -142,12 +288,10 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           Row(
             children: [
-              const Icon(Icons.tune, size: 18, color: AppColors.primary),
+              Icon(Icons.tune, size: 18, color: context.appColors.primary),
               const SizedBox(width: 6),
-              const Expanded(
-                child: Text('首页顶部标签预览', style: AppTextStyles.bodyStrong),
-              ),
-              Text('共 ${displayTags.length} 项', style: AppTextStyles.caption),
+              Expanded(child: Text('首页顶部标签预览', style: context.bodyStrongStyle)),
+              Text('共 ${displayTags.length} 项', style: context.captionStyle),
             ],
           ),
           const SizedBox(height: 10),
@@ -168,8 +312,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                     decoration: BoxDecoration(
                       color: isFirst
-                          ? AppColors.brandDark
-                          : AppColors.inputFill,
+                          ? context.appColors.brandButtonBg
+                          : context.appColors.inputFill,
                       borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                     child: Text(
@@ -178,7 +322,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.2,
-                        color: isFirst ? Colors.white : AppColors.textPrimary,
+                        color: isFirst
+                            ? context.appColors.brandButtonFg
+                            : context.appColors.textPrimary,
                         fontWeight: isFirst
                             ? FontWeight.w600
                             : FontWeight.normal,
@@ -196,19 +342,21 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildShowAllCard(bool showAll) {
     return Material(
-      color: Colors.white,
+      color: context.appColors.cardBackground,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.card),
-        side: BorderSide(color: AppColors.divider.withValues(alpha: 0.6)),
+        side: BorderSide(
+          color: context.appColors.divider.withValues(alpha: 0.6),
+        ),
       ),
       child: SwitchListTile(
         value: showAll,
         onChanged: _toggleShowAll,
-        title: const Text('首位显示「全部」标签', style: AppTextStyles.bodyStrong),
-        subtitle: const Text(
+        title: Text('首位显示「全部」标签', style: context.bodyStrongStyle),
+        subtitle: Text(
           '开启后可在首页一键查看全语言热门开源项目',
-          style: AppTextStyles.captionSmall,
+          style: context.captionSmallStyle,
         ),
       ),
     );
@@ -222,10 +370,10 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Expanded(child: Text('选择展示标签', style: AppTextStyles.bodyStrong)),
-              Text('点击勾选或取消', style: AppTextStyles.captionSmall),
+              Expanded(child: Text('选择展示标签', style: context.bodyStrongStyle)),
+              Text('点击勾选或取消', style: context.captionSmallStyle),
             ],
           ),
           const SizedBox(height: 10),
@@ -251,21 +399,25 @@ class _SettingsPageState extends State<SettingsPage> {
       label: Text(tag, softWrap: false),
       selected: selected,
       showCheckmark: true,
-      checkmarkColor: Colors.white,
-      selectedColor: AppColors.brandDark,
-      backgroundColor: AppColors.inputFill,
+      checkmarkColor: context.appColors.brandButtonFg,
+      selectedColor: context.appColors.brandButtonBg,
+      backgroundColor: context.appColors.inputFill,
       side: BorderSide.none,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       labelStyle: TextStyle(
         fontSize: 12.5,
-        color: selected ? Colors.white : AppColors.textPrimary,
+        color: selected
+            ? context.appColors.brandButtonFg
+            : context.appColors.textPrimary,
         fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
       ),
       onSelected: (_) => _toggleTag(tag),
       onDeleted: isCustom ? () => _removeCustomTag(tag) : null,
-      deleteIconColor: selected ? Colors.white70 : AppColors.textSecondary,
+      deleteIconColor: selected
+          ? context.appColors.brandButtonFg.withValues(alpha: 0.7)
+          : context.appColors.textSecondary,
       deleteButtonTooltipMessage: '删除自定义标签',
     );
   }
@@ -275,11 +427,11 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('添加自定义标签', style: AppTextStyles.bodyStrong),
+          Text('添加自定义标签', style: context.bodyStrongStyle),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             '支持编程语言名称（如 Zig、Solidity）或搜索条件（如 topic:ai）',
-            style: AppTextStyles.captionSmall,
+            style: context.captionSmallStyle,
           ),
           const SizedBox(height: 10),
           Row(
@@ -291,9 +443,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   onSubmitted: (_) => _addCustomTag(),
                   decoration: InputDecoration(
                     hintText: '输入标签名称...',
-                    hintStyle: AppTextStyles.caption,
+                    hintStyle: context.captionStyle,
                     filled: true,
-                    fillColor: AppColors.inputFill,
+                    fillColor: context.appColors.inputFill,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 14,
                       vertical: 10,
@@ -309,8 +461,8 @@ class _SettingsPageState extends State<SettingsPage> {
               ElevatedButton(
                 onPressed: _addCustomTag,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.brandDark,
-                  foregroundColor: Colors.white,
+                  backgroundColor: context.appColors.brandButtonBg,
+                  foregroundColor: context.appColors.brandButtonFg,
                   elevation: 0,
                   shape: const StadiumBorder(),
                   padding: const EdgeInsets.symmetric(
@@ -332,10 +484,10 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Expanded(child: Text('已选标签顺序', style: AppTextStyles.bodyStrong)),
-              Text('拖拽或点箭头调序', style: AppTextStyles.captionSmall),
+              Expanded(child: Text('已选标签顺序', style: context.bodyStrongStyle)),
+              Text('拖拽或点箭头调序', style: context.captionSmallStyle),
             ],
           ),
           const SizedBox(height: 6),
@@ -351,9 +503,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 key: ValueKey('tag_order_$tag'),
                 decoration: BoxDecoration(
                   border: index < selectedTags.length - 1
-                      ? const Border(
+                      ? Border(
                           bottom: BorderSide(
-                            color: AppColors.divider,
+                            color: context.appColors.divider,
                             width: 0.5,
                           ),
                         )
@@ -365,12 +517,12 @@ class _SettingsPageState extends State<SettingsPage> {
                     children: [
                       ReorderableDragStartListener(
                         index: index,
-                        child: const Padding(
-                          padding: EdgeInsets.only(right: 8),
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8),
                           child: Icon(
                             Icons.drag_indicator,
                             size: 18,
-                            color: AppColors.textSecondary,
+                            color: context.appColors.textSecondary,
                           ),
                         ),
                       ),
@@ -388,7 +540,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           tag,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.body,
+                          style: context.bodyStyle,
                         ),
                       ),
                       IconButton(
@@ -419,10 +571,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       IconButton(
                         onPressed: () => _toggleTag(tag),
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.close,
                           size: 17,
-                          color: AppColors.textSecondary,
+                          color: context.appColors.textSecondary,
                         ),
                         tooltip: '移除',
                         visualDensity: VisualDensity.compact,

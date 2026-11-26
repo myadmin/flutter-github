@@ -10,18 +10,46 @@ import 'package:gh_explorer/routes/index.dart';
 import 'package:gh_explorer/stores/explore_tags_controller.dart';
 import 'package:gh_explorer/stores/rate_limit_controller.dart';
 import 'package:gh_explorer/stores/star_sync_controller.dart';
+import 'package:gh_explorer/stores/theme_controller.dart';
+import 'package:gh_explorer/stores/token_manager.dart';
 import 'package:gh_explorer/stores/user_controller.dart';
 import 'package:gh_explorer/utils/dio_request.dart';
+
+/// 测试用纯内存凭证存储，避免 FlutterSecureStorage 插件通道阻塞 FakeAsync 帧循环
+class InMemorySecretStore implements SecretStore {
+  final Map<String, String> _values = <String, String>{};
+
+  @override
+  Future<String?> read(String key) async => _values[key];
+
+  @override
+  Future<void> write(String key, String value) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    _values.remove(key);
+  }
+}
 
 /// 构建测试用 MaterialApp，避免 `home` 与 `getRootRoutes()` 中的 `/` 冲突
 Widget buildTestApp(Widget home) {
   final routes = Map<String, WidgetBuilder>.from(getRootRoutes())
     ..remove(AppRoutes.home);
-  return MaterialApp(
-    home: home,
-    routes: routes,
-    onGenerateRoute: buildRoute,
-    onUnknownRoute: buildUnknownRoute,
+  final themeController = Get.isRegistered<ThemeController>()
+      ? Get.find<ThemeController>()
+      : Get.put(ThemeController(), permanent: true);
+  return Obx(
+    () => MaterialApp(
+      home: home,
+      routes: routes,
+      onGenerateRoute: buildRoute,
+      onUnknownRoute: buildUnknownRoute,
+      theme: buildAppTheme(brightness: Brightness.light),
+      darkTheme: buildAppTheme(brightness: Brightness.dark),
+      themeMode: themeController.themeMode.value,
+    ),
   );
 }
 
@@ -117,19 +145,23 @@ MockAdapter installAuthMock(
   StarSyncController starSync,
   RateLimitController rateLimit,
   ExploreTagsController exploreTags,
+  ThemeController theme,
 })
 registerTestControllers() {
   Get.reset();
   ExploreShowcaseCache.clear();
+  tokenManager.secretStore = InMemorySecretStore();
   final user = Get.put(UserController(), permanent: true);
   final starSync = Get.put(StarSyncController(), permanent: true);
   final rateLimit = Get.put(RateLimitController(), permanent: true);
   final exploreTags = Get.put(ExploreTagsController(), permanent: true);
+  final theme = Get.put(ThemeController(), permanent: true);
   return (
     user: user,
     starSync: starSync,
     rateLimit: rateLimit,
     exploreTags: exploreTags,
+    theme: theme,
   );
 }
 

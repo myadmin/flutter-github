@@ -31,11 +31,14 @@ class GhMineHeader extends StatelessWidget {
     final loggedIn = user.isLoggedIn;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Colors.white, AppColors.headerGradientEnd],
+          colors: [
+            context.appColors.cardBackground,
+            context.appColors.headerGradientEnd,
+          ],
         ),
       ),
       child: Column(
@@ -65,7 +68,7 @@ class GhMineHeader extends StatelessWidget {
                         loggedIn ? user.displayName : '点击登录 GitHub',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.pageTitle.copyWith(fontSize: 18),
+                        style: context.pageTitleStyle.copyWith(fontSize: 18),
                       ),
                       const SizedBox(height: 3),
                       Text(
@@ -74,7 +77,7 @@ class GhMineHeader extends StatelessWidget {
                             : '当前为游客浏览，登录后可点 Star 与查看动态',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.caption,
+                        style: context.captionStyle,
                       ),
                     ],
                   ),
@@ -84,8 +87,8 @@ class GhMineHeader extends StatelessWidget {
                 OutlinedButton(
                   onPressed: onLogoutTap,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textSecondary,
-                    side: const BorderSide(color: AppColors.divider),
+                    foregroundColor: context.appColors.textSecondary,
+                    side: BorderSide(color: context.appColors.divider),
                     shape: const StadiumBorder(),
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                   ),
@@ -95,8 +98,8 @@ class GhMineHeader extends StatelessWidget {
                 ElevatedButton(
                   onPressed: onLoginTap,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.brandDark,
-                    foregroundColor: Colors.white,
+                    backgroundColor: context.appColors.brandButtonBg,
+                    foregroundColor: context.appColors.brandButtonFg,
                     elevation: 0,
                     shape: const StadiumBorder(),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -107,17 +110,17 @@ class GhMineHeader extends StatelessWidget {
           ),
           if (loggedIn && user.bio.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Text(user.bio, style: AppTextStyles.bodySmall),
+            Text(user.bio, style: context.bodySmallStyle),
           ],
           if (loggedIn) ...[
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.appColors.cardBackground,
                 borderRadius: BorderRadius.circular(AppRadius.card),
                 border: Border.all(
-                  color: AppColors.divider.withValues(alpha: 0.6),
+                  color: context.appColors.divider.withValues(alpha: 0.6),
                 ),
               ),
               child: Row(
@@ -129,7 +132,7 @@ class GhMineHeader extends StatelessWidget {
                       onTap: onReposTap,
                     ),
                   ),
-                  _verticalDivider(),
+                  _verticalDivider(context),
                   Expanded(
                     child: _MetricCell(
                       label: 'Followers',
@@ -137,7 +140,7 @@ class GhMineHeader extends StatelessWidget {
                       onTap: onFollowersTap,
                     ),
                   ),
-                  _verticalDivider(),
+                  _verticalDivider(context),
                   Expanded(
                     child: _MetricCell(
                       label: 'Following',
@@ -155,8 +158,8 @@ class GhMineHeader extends StatelessWidget {
   }
 
   /// 统计项之间的竖向分割线
-  Widget _verticalDivider() {
-    return Container(width: 1, height: 24, color: AppColors.divider);
+  Widget _verticalDivider(BuildContext context) {
+    return Container(width: 1, height: 24, color: context.appColors.divider);
   }
 }
 
@@ -179,9 +182,9 @@ class _MetricCell extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(value, style: AppTextStyles.sectionTitle),
+          Text(value, style: context.sectionTitleStyle),
           const SizedBox(height: 2),
-          Text(label, style: AppTextStyles.captionSmall),
+          Text(label, style: context.captionSmallStyle),
         ],
       ),
     );

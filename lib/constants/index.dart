@@ -38,6 +38,9 @@ class GlobalConstants {
   /// 本地存储键名：用户自定义添加的探索顶部标签列表
   static const String exploreCustomTagsKey = 'gh_explorer_explore_custom_tags';
 
+  /// 本地存储键名：应用外观主题模式（system / light / dark）
+  static const String themeModeKey = 'gh_explorer_theme_mode';
+
   /// 本地存储键名：上次检查更新的时间戳
   static const String updateLastCheckKey = 'gh_explorer_update_last_check';
 

@@ -22,8 +22,8 @@ class UnknownRoutePage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('页面不存在'),
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appColors.pageBackground,
+        foregroundColor: context.appColors.textPrimary,
         elevation: 0,
       ),
       body: Center(
@@ -32,15 +32,15 @@ class UnknownRoutePage extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.explore_off_outlined,
                 size: 56,
-                color: AppColors.textSecondary,
+                color: context.appColors.textSecondary,
               ),
               const SizedBox(height: 12),
               Text(
                 '没有找到这个页面',
-                style: AppTextStyles.tileTitle.copyWith(fontSize: 16),
+                style: context.tileTitleStyle.copyWith(fontSize: 16),
               ),
               const SizedBox(height: 6),
               Text(
@@ -48,14 +48,14 @@ class UnknownRoutePage extends StatelessWidget {
                     ? '地址可能已经失效，回首页继续浏览吧'
                     : '地址 $location',
                 textAlign: TextAlign.center,
-                style: AppTextStyles.caption,
+                style: context.captionStyle,
               ),
               const SizedBox(height: 20),
               OutlinedButton(
                 onPressed: () => _backToHome(context),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.brandDark,
-                  side: const BorderSide(color: AppColors.brandDark),
+                  foregroundColor: context.appColors.brandDark,
+                  side: BorderSide(color: context.appColors.brandDark),
                   shape: const StadiumBorder(),
                 ),
                 child: const Text('返回首页'),

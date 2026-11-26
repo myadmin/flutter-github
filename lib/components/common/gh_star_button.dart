@@ -106,7 +106,8 @@ class _GhStarButtonState extends State<GhStarButton> {
     if (userCtrl != null && !userCtrl.isLoggedIn) {
       ToastUtils.showToast(context, '登录后即可 Star 项目');
       await Navigator.pushNamed(context, AppRoutes.login);
-      return;
+      // 登录成功后自动续做本次 Star 操作，避免用户再点一次
+      if (!mounted || !userCtrl.isLoggedIn) return;
     }
 
     final (prevStarred, prevCount) = _currentState();
@@ -161,7 +162,9 @@ class _GhStarButtonState extends State<GhStarButton> {
     final icon = Icon(
       starred ? Icons.star : Icons.star_border,
       size: widget.compact ? 18 : 18,
-      color: starred ? AppColors.starActive : AppColors.textSecondary,
+      color: starred
+          ? context.appColors.starActive
+          : context.appColors.textSecondary,
     );
 
     if (widget.compact) {
@@ -174,10 +177,14 @@ class _GhStarButtonState extends State<GhStarButton> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: starred ? AppColors.starSurface : AppColors.inputFill,
+              color: starred
+                  ? context.appColors.starSurface
+                  : context.appColors.inputFill,
               borderRadius: BorderRadius.circular(AppRadius.pill),
               border: Border.all(
-                color: starred ? AppColors.starActive : AppColors.divider,
+                color: starred
+                    ? context.appColors.starActive
+                    : context.appColors.divider,
               ),
             ),
             child: Row(
@@ -187,8 +194,8 @@ class _GhStarButtonState extends State<GhStarButton> {
                 const SizedBox(width: 4),
                 Text(
                   formatCompactNumber(count),
-                  style: AppTextStyles.captionSmall.copyWith(
-                    color: AppColors.textPrimary,
+                  style: context.captionSmallStyle.copyWith(
+                    color: context.appColors.textPrimary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -205,10 +212,14 @@ class _GhStarButtonState extends State<GhStarButton> {
       child: OutlinedButton.icon(
         onPressed: _pending ? null : _handleTap,
         style: OutlinedButton.styleFrom(
-          backgroundColor: starred ? AppColors.starSurface : Colors.white,
-          foregroundColor: AppColors.textPrimary,
+          backgroundColor: starred
+              ? context.appColors.starSurface
+              : context.appColors.cardBackground,
+          foregroundColor: context.appColors.textPrimary,
           side: BorderSide(
-            color: starred ? AppColors.starActive : AppColors.divider,
+            color: starred
+                ? context.appColors.starActive
+                : context.appColors.divider,
           ),
           shape: const StadiumBorder(),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -216,7 +227,7 @@ class _GhStarButtonState extends State<GhStarButton> {
         icon: icon,
         label: Text(
           '${starred ? 'Starred' : 'Star'} · ${formatCompactNumber(count)}',
-          style: AppTextStyles.bodyStrong,
+          style: context.bodyStrongStyle,
         ),
       ),
     );

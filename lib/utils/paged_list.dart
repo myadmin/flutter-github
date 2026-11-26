@@ -41,9 +41,14 @@ class PagedListController<T> extends ChangeNotifier {
   int _page = 1;
   bool _isLoading = false;
   bool _loadingMore = false;
+  bool _refreshing = false;
   bool _hasMore = true;
   String _errorMessage = '';
   bool _disposed = false;
+
+  /// 请求代际：refresh / clear 时自增，使所有在途请求的响应作废，
+  /// 避免旧查询结果覆盖新列表（搜索词/筛选条件/仓库分支切换等场景）。
+  int _epoch = 0;
 
   List<T> get items => UnmodifiableListView<T>(_items);
 
@@ -64,26 +69,30 @@ class PagedListController<T> extends ChangeNotifier {
   /// 首次加载或下拉刷新
   Future<void> refresh() async {
     if (_disposed) return;
+    final int epoch = ++_epoch;
+    _refreshing = true;
     _isLoading = _items.isEmpty;
     _loadingMore = false;
     _errorMessage = '';
     _hasMore = true;
     notifyListeners();
-    await _fetch(page: 1, reset: true);
+    await _fetch(page: 1, reset: true, epoch: epoch);
   }
 
   /// 上拉加载下一页
   Future<void> loadMore() async {
     if (_disposed ||
         _isLoading ||
+        _refreshing ||
         _loadingMore ||
         !_hasMore ||
         _items.isEmpty) {
       return;
     }
+    final int epoch = _epoch;
     _loadingMore = true;
     notifyListeners();
-    await _fetch(page: _page + 1, reset: false);
+    await _fetch(page: _page + 1, reset: false, epoch: epoch);
   }
 
   /// 本地移除若干项（如取消 Star 后同步我的 Star 列表）
@@ -97,6 +106,8 @@ class PagedListController<T> extends ChangeNotifier {
   /// 清空列表与状态
   void clear() {
     if (_disposed) return;
+    _epoch++; // 作废在途请求，防止旧页数据回填
+    _refreshing = false;
     _items.clear();
     _page = 1;
     _isLoading = false;
@@ -106,10 +117,14 @@ class PagedListController<T> extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _fetch({required int page, required bool reset}) async {
+  Future<void> _fetch({
+    required int page,
+    required bool reset,
+    required int epoch,
+  }) async {
     try {
       final PageResult<T> result = await loader(page);
-      if (_disposed) return;
+      if (_disposed || epoch != _epoch) return;
       if (reset) {
         _items
           ..clear()
@@ -120,7 +135,7 @@ class PagedListController<T> extends ChangeNotifier {
       _page = result.page > 0 ? result.page : page;
       _hasMore = result.hasMore && result.items.isNotEmpty;
     } catch (error) {
-      if (_disposed) return;
+      if (_disposed || epoch != _epoch) return;
       final String message = resolveErrorMessage(
         error,
         fallback: reset ? firstPageErrorFallback : loadMoreErrorFallback,
@@ -131,7 +146,9 @@ class PagedListController<T> extends ChangeNotifier {
         onLoadMoreError?.call(message);
       }
     } finally {
-      if (!_disposed) {
+      // 只有最新代际的请求才允许恢复状态，旧请求结束时不得覆盖新一轮刷新的 loading 态
+      if (!_disposed && epoch == _epoch) {
+        _refreshing = false;
         _isLoading = false;
         _loadingMore = false;
         notifyListeners();

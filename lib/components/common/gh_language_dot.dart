@@ -30,7 +30,7 @@ class GhLanguageDot extends StatelessWidget {
           language,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: textStyle ?? AppTextStyles.caption,
+          style: textStyle ?? context.captionStyle,
         ),
       ],
     );

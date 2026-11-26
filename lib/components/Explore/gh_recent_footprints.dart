@@ -28,11 +28,9 @@ class GhRecentFootprints extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Icon(Icons.history, size: 17, color: AppColors.primary),
+            Icon(Icons.history, size: 17, color: context.appColors.primary),
             const SizedBox(width: 6),
-            const Expanded(
-              child: Text('继续浏览', style: AppTextStyles.bodyStrong),
-            ),
+            Expanded(child: Text('继续浏览', style: context.bodyStrongStyle)),
             InkWell(
               onTap: onViewAllTap,
               borderRadius: BorderRadius.circular(AppRadius.small),
@@ -43,14 +41,14 @@ class GhRecentFootprints extends StatelessWidget {
                   children: [
                     Text(
                       '全部足迹',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.primary,
+                      style: context.captionStyle.copyWith(
+                        color: context.appColors.primary,
                       ),
                     ),
-                    const Icon(
+                    Icon(
                       Icons.chevron_right,
                       size: 16,
-                      color: AppColors.primary,
+                      color: context.appColors.primary,
                     ),
                   ],
                 ),
@@ -90,7 +88,7 @@ class _CompactFootprintCard extends StatelessWidget {
     return SizedBox(
       width: 178,
       child: Material(
-        color: AppColors.cardBackground,
+        color: context.appColors.cardBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
         child: InkWell(
           onTap: onTap,
@@ -100,7 +98,7 @@ class _CompactFootprintCard extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppRadius.card),
               border: Border.all(
-                color: AppColors.divider.withValues(alpha: 0.6),
+                color: context.appColors.divider.withValues(alpha: 0.6),
               ),
             ),
             child: Column(
@@ -111,16 +109,16 @@ class _CompactFootprintCard extends StatelessWidget {
                   item.fullName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodyStrong.copyWith(
+                  style: context.bodyStrongStyle.copyWith(
                     fontSize: 13,
-                    color: AppColors.primary,
+                    color: context.appColors.primary,
                   ),
                 ),
                 Text(
                   item.description.isEmpty ? '点击继续查看详情' : item.description,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.captionSmall,
+                  style: context.captionSmallStyle,
                 ),
                 Row(
                   children: [
@@ -128,15 +126,15 @@ class _CompactFootprintCard extends StatelessWidget {
                       Expanded(child: GhLanguageDot(language: item.language)),
                     ] else
                       const Spacer(),
-                    const Icon(
+                    Icon(
                       Icons.star_border,
                       size: 13,
-                      color: AppColors.textSecondary,
+                      color: context.appColors.textSecondary,
                     ),
                     const SizedBox(width: 2),
                     Text(
                       formatCompactNumber(item.stargazersCount),
-                      style: AppTextStyles.captionSmall,
+                      style: context.captionSmallStyle,
                     ),
                   ],
                 ),

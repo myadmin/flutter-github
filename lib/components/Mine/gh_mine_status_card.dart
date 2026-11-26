@@ -54,19 +54,21 @@ class GhMineStatusCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appColors.cardBackground,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.divider.withValues(alpha: 0.6)),
+        border: Border.all(
+          color: context.appColors.divider.withValues(alpha: 0.6),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.speed, size: 18, color: AppColors.primary),
+              Icon(Icons.speed, size: 18, color: context.appColors.primary),
               const SizedBox(width: 6),
-              const Expanded(
-                child: Text('GitHub API 配额', style: AppTextStyles.bodyStrong),
+              Expanded(
+                child: Text('GitHub API 配额', style: context.bodyStrongStyle),
               ),
               TextButton(
                 onPressed: onRefreshRateLimit,
@@ -84,9 +86,11 @@ class GhMineStatusCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: ratio,
               minHeight: 6,
-              backgroundColor: AppColors.inputFill,
+              backgroundColor: context.appColors.inputFill,
               valueColor: AlwaysStoppedAnimation<Color>(
-                rateLimit.remaining < 10 ? AppColors.badge : AppColors.primary,
+                rateLimit.remaining < 10
+                    ? context.appColors.badge
+                    : context.appColors.primary,
               ),
             ),
           ),
@@ -96,11 +100,11 @@ class GhMineStatusCard extends StatelessWidget {
             children: [
               Text(
                 '剩余 ${rateLimit.remaining} / ${rateLimit.limit} 次',
-                style: AppTextStyles.caption,
+                style: context.captionStyle,
               ),
               Text(
                 '重置时间：${_formatResetTime(rateLimit.resetAt)}',
-                style: AppTextStyles.caption,
+                style: context.captionStyle,
               ),
             ],
           ),
@@ -111,22 +115,22 @@ class GhMineStatusCard extends StatelessWidget {
               children: [
                 Text(
                   '搜索接口：剩余 ${searchRateLimit!.remaining} / ${searchRateLimit!.limit} 次',
-                  style: AppTextStyles.captionSmall.copyWith(
+                  style: context.captionSmallStyle.copyWith(
                     color: searchRateLimit!.remaining <= 2
-                        ? AppColors.badge
-                        : AppColors.textSecondary,
+                        ? context.appColors.badge
+                        : context.appColors.textSecondary,
                   ),
                 ),
                 Text(
                   '重置：${_formatResetTime(searchRateLimit!.resetAt)}',
-                  style: AppTextStyles.captionSmall,
+                  style: context.captionSmallStyle,
                 ),
               ],
             ),
           ],
           if (scopes.isNotEmpty) ...[
-            const Divider(height: 22, color: AppColors.divider),
-            const Text('当前 Token 权限范围', style: AppTextStyles.bodySmall),
+            Divider(height: 22, color: context.appColors.divider),
+            Text('当前 Token 权限范围', style: context.bodySmallStyle),
             const SizedBox(height: 8),
             Wrap(
               spacing: 6,
@@ -139,13 +143,13 @@ class GhMineStatusCard extends StatelessWidget {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.primarySurface,
+                      color: context.appColors.primarySurface,
                       borderRadius: BorderRadius.circular(AppRadius.small),
                     ),
                     child: Text(
                       scope,
-                      style: AppTextStyles.captionSmall.copyWith(
-                        color: AppColors.primary,
+                      style: context.captionSmallStyle.copyWith(
+                        color: context.appColors.primary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -153,19 +157,19 @@ class GhMineStatusCard extends StatelessWidget {
               ],
             ),
           ],
-          const Divider(height: 22, color: AppColors.divider),
+          Divider(height: 22, color: context.appColors.divider),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('应用版本', style: AppTextStyles.bodySmall),
+              Text('应用版本', style: context.bodySmallStyle),
               Text(
                 _formatVersionLabel(versionText),
-                style: AppTextStyles.caption,
+                style: context.captionStyle,
               ),
             ],
           ),
           if (onCheckUpdate != null) ...[
-            const Divider(height: 18, color: AppColors.divider),
+            Divider(height: 18, color: context.appColors.divider),
             Material(
               color: Colors.transparent,
               child: InkWell(
@@ -176,7 +180,7 @@ class GhMineStatusCard extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('检查更新', style: AppTextStyles.bodySmall),
+                      Text('检查更新', style: context.bodySmallStyle),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -187,14 +191,14 @@ class GhMineStatusCard extends StatelessWidget {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                             const SizedBox(width: 6),
-                            const Text('检查中...', style: AppTextStyles.caption),
+                            Text('检查中...', style: context.captionStyle),
                           ] else ...[
-                            const Text('立即检测', style: AppTextStyles.caption),
+                            Text('立即检测', style: context.captionStyle),
                             const SizedBox(width: 2),
-                            const Icon(
+                            Icon(
                               Icons.chevron_right,
                               size: 16,
-                              color: AppColors.textSecondary,
+                              color: context.appColors.textSecondary,
                             ),
                           ],
                         ],

@@ -6,6 +6,7 @@ class ReleaseAsset {
     required this.name,
     required this.downloadUrl,
     required this.size,
+    this.digest = '',
   });
 
   /// 产物文件名，例如 `app-arm64-v8a-release.apk`
@@ -17,17 +18,30 @@ class ReleaseAsset {
   /// 文件字节大小
   final int size;
 
+  /// GitHub 记录的内容摘要（如 `sha256:...`，旧版 Release 可能为空）
+  final String digest;
+
   /// 从 GitHub Release Asset JSON 解析对象
   factory ReleaseAsset.fromJson(Map<String, dynamic> json) {
     return ReleaseAsset(
       name: asString(json['name']),
       downloadUrl: asString(json['browser_download_url']),
       size: asInt(json['size']),
+      digest: asString(json['digest']),
     );
   }
 
   /// 是否为 Android APK 安装包
   bool get isAndroidApk => name.toLowerCase().endsWith('.apk');
+
+  /// 提取 SHA-256 十六进制摘要（无摘要或算法非 sha256 时返回空串）
+  String get sha256Digest {
+    final value = digest.trim().toLowerCase();
+    if (value.startsWith('sha256:')) {
+      return value.substring('sha256:'.length).trim();
+    }
+    return '';
+  }
 
   /// 格式化为人类可读的文件体积文案
   String get sizeText {
@@ -155,28 +169,30 @@ class AppRelease {
     return fallback.join('\n').trim();
   }
 
-  /// 根据当前设备支持的 ABI 优先级挑选最匹配的 `.apk` 产物
+  /// 根据当前设备支持的 ABI 优先级挑选最匹配的 `.apk` 产物。
+  ///
+  /// 不再回退到「第一个 APK」：ABI 不匹配时宁可提示用户手动下载，
+  /// 也不要静默安装一个在设备上无法运行的安装包。
   ReleaseAsset? pickAndroidApkAsset({
     List<String> supportedAbis = const ['arm64-v8a', 'armeabi-v7a', 'x86_64'],
   }) {
     final apks = assets.where((asset) => asset.isAndroidApk).toList();
     if (apks.isEmpty) return null;
 
-    for (final abi in supportedAbis) {
+    final orderedAbis = <String>[
+      ...supportedAbis,
+      'arm64-v8a',
+      'armeabi-v7a',
+      'x86_64',
+    ];
+    for (final abi in orderedAbis) {
       for (final apk in apks) {
         if (apk.name.contains(abi)) {
           return apk;
         }
       }
     }
-    for (final abi in const ['arm64-v8a', 'armeabi-v7a', 'x86_64']) {
-      for (final apk in apks) {
-        if (apk.name.contains(abi)) {
-          return apk;
-        }
-      }
-    }
-    return apks.first;
+    return null;
   }
 }
 

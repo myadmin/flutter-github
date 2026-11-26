@@ -22,6 +22,8 @@ class AppUpdateService {
       required String url,
       required String directoryPath,
       required String fileName,
+      String expectedSha256,
+      int expectedSize,
       ApkDownloadProgressCallback? onProgress,
       CancelToken? cancelToken,
     })?
@@ -54,6 +56,8 @@ class AppUpdateService {
     required String url,
     required String directoryPath,
     required String fileName,
+    String expectedSha256,
+    int expectedSize,
     ApkDownloadProgressCallback? onProgress,
     CancelToken? cancelToken,
   })
@@ -144,6 +148,8 @@ class AppUpdateService {
       url: asset.downloadUrl,
       directoryPath: env.cacheDir,
       fileName: targetName,
+      expectedSha256: asset.sha256Digest,
+      expectedSize: asset.size,
       onProgress: onProgress,
       cancelToken: cancelToken,
     );
@@ -163,8 +169,16 @@ class AppUpdateService {
               ? release.htmlUrl
               : GlobalConstants.releasesPageUrl);
     if (target.isEmpty) return false;
+    final uri = Uri.tryParse(target);
+    // 仅允许跳转 HTTPS 的 GitHub 域名，避免恶意 Release 正文注入任意链接
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        !(uri.host == 'github.com' ||
+            uri.host == 'objects.githubusercontent.com')) {
+      return false;
+    }
     try {
-      return await _launchUrl(Uri.parse(target));
+      return await _launchUrl(uri);
     } catch (e) {
       debugPrint('打开更新下载页失败: $e');
       return false;

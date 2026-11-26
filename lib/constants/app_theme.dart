@@ -254,3 +254,231 @@ class AppSpacing {
   static const double page = 12;
   static const double large = 20;
 }
+
+/// 应用全局动态明/暗双主题语义色板（通过 `ThemeExtension` 下发并在运行时切换）
+class AppThemePalette extends ThemeExtension<AppThemePalette> {
+  const AppThemePalette({
+    required this.isDark,
+    required this.primary,
+    required this.primaryDisabled,
+    required this.primarySurface,
+    required this.brandDark,
+    required this.brandButtonBg,
+    required this.brandButtonFg,
+    required this.headerGradientEnd,
+    required this.pageBackground,
+    required this.cardBackground,
+    required this.inputFill,
+    required this.imagePlaceholder,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.divider,
+    required this.starActive,
+    required this.starSurface,
+    required this.badge,
+    required this.success,
+    required this.successSurface,
+    required this.merged,
+    required this.mergedSurface,
+    required this.link,
+    required this.barShadow,
+    required this.codeBackground,
+  });
+
+  final bool isDark;
+  final Color primary;
+  final Color primaryDisabled;
+  final Color primarySurface;
+  final Color brandDark;
+  final Color brandButtonBg;
+  final Color brandButtonFg;
+  final Color headerGradientEnd;
+  final Color pageBackground;
+  final Color cardBackground;
+  final Color inputFill;
+  final Color imagePlaceholder;
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color divider;
+  final Color starActive;
+  final Color starSurface;
+  final Color badge;
+  final Color success;
+  final Color successSurface;
+  final Color merged;
+  final Color mergedSurface;
+  final Color link;
+  final Color barShadow;
+  final Color codeBackground;
+
+  /// GitHub 浅色主题默认色板
+  static const AppThemePalette light = AppThemePalette(
+    isDark: false,
+    primary: AppColors.primary,
+    primaryDisabled: AppColors.primaryDisabled,
+    primarySurface: AppColors.primarySurface,
+    brandDark: AppColors.brandDark,
+    brandButtonBg: AppColors.brandDark,
+    brandButtonFg: Colors.white,
+    headerGradientEnd: AppColors.headerGradientEnd,
+    pageBackground: AppColors.pageBackground,
+    cardBackground: AppColors.cardBackground,
+    inputFill: AppColors.inputFill,
+    imagePlaceholder: AppColors.imagePlaceholder,
+    textPrimary: AppColors.textPrimary,
+    textSecondary: AppColors.textSecondary,
+    divider: AppColors.divider,
+    starActive: AppColors.starActive,
+    starSurface: AppColors.starSurface,
+    badge: AppColors.badge,
+    success: AppColors.success,
+    successSurface: AppColors.successSurface,
+    merged: AppColors.merged,
+    mergedSurface: AppColors.mergedSurface,
+    link: AppColors.link,
+    barShadow: AppColors.barShadow,
+    codeBackground: AppColors.codeBackground,
+  );
+
+  /// GitHub 深色主题默认色板
+  static const AppThemePalette dark = AppThemePalette(
+    isDark: true,
+    primary: Color(0xFF58A6FF),
+    primaryDisabled: Color(0xFF285380),
+    primarySurface: Color(0xFF132C47),
+    brandDark: Color(0xFFE6EDF3),
+    brandButtonBg: Color(0xFF1F6FEB),
+    brandButtonFg: Colors.white,
+    headerGradientEnd: Color(0xFF0D1117),
+    pageBackground: Color(0xFF0D1117),
+    cardBackground: Color(0xFF161B22),
+    inputFill: Color(0xFF21262D),
+    imagePlaceholder: Color(0xFF21262D),
+    textPrimary: Color(0xFFE6EDF3),
+    textSecondary: Color(0xFF8B949E),
+    divider: Color(0xFF30363D),
+    starActive: Color(0xFFEAC54F),
+    starSurface: Color(0xFF342A11),
+    badge: Color(0xFFF85149),
+    success: Color(0xFF3FB950),
+    successSurface: Color(0xFF122B1B),
+    merged: Color(0xFFA371F7),
+    mergedSurface: Color(0xFF271B3B),
+    link: Color(0xFF58A6FF),
+    barShadow: Color(0x55000000),
+    codeBackground: Color(0xFF161B22),
+  );
+
+  @override
+  AppThemePalette copyWith({
+    bool? isDark,
+    Color? primary,
+    Color? primaryDisabled,
+    Color? primarySurface,
+    Color? brandDark,
+    Color? brandButtonBg,
+    Color? brandButtonFg,
+    Color? headerGradientEnd,
+    Color? pageBackground,
+    Color? cardBackground,
+    Color? inputFill,
+    Color? imagePlaceholder,
+    Color? textPrimary,
+    Color? textSecondary,
+    Color? divider,
+    Color? starActive,
+    Color? starSurface,
+    Color? badge,
+    Color? success,
+    Color? successSurface,
+    Color? merged,
+    Color? mergedSurface,
+    Color? link,
+    Color? barShadow,
+    Color? codeBackground,
+  }) {
+    return AppThemePalette(
+      isDark: isDark ?? this.isDark,
+      primary: primary ?? this.primary,
+      primaryDisabled: primaryDisabled ?? this.primaryDisabled,
+      primarySurface: primarySurface ?? this.primarySurface,
+      brandDark: brandDark ?? this.brandDark,
+      brandButtonBg: brandButtonBg ?? this.brandButtonBg,
+      brandButtonFg: brandButtonFg ?? this.brandButtonFg,
+      headerGradientEnd: headerGradientEnd ?? this.headerGradientEnd,
+      pageBackground: pageBackground ?? this.pageBackground,
+      cardBackground: cardBackground ?? this.cardBackground,
+      inputFill: inputFill ?? this.inputFill,
+      imagePlaceholder: imagePlaceholder ?? this.imagePlaceholder,
+      textPrimary: textPrimary ?? this.textPrimary,
+      textSecondary: textSecondary ?? this.textSecondary,
+      divider: divider ?? this.divider,
+      starActive: starActive ?? this.starActive,
+      starSurface: starSurface ?? this.starSurface,
+      badge: badge ?? this.badge,
+      success: success ?? this.success,
+      successSurface: successSurface ?? this.successSurface,
+      merged: merged ?? this.merged,
+      mergedSurface: mergedSurface ?? this.mergedSurface,
+      link: link ?? this.link,
+      barShadow: barShadow ?? this.barShadow,
+      codeBackground: codeBackground ?? this.codeBackground,
+    );
+  }
+
+  @override
+  AppThemePalette lerp(ThemeExtension<AppThemePalette>? other, double t) {
+    if (other is! AppThemePalette) return this;
+    return AppThemePalette(
+      isDark: t < 0.5 ? isDark : other.isDark,
+      primary: Color.lerp(primary, other.primary, t) ?? primary,
+      primaryDisabled:
+          Color.lerp(primaryDisabled, other.primaryDisabled, t) ??
+          primaryDisabled,
+      primarySurface:
+          Color.lerp(primarySurface, other.primarySurface, t) ?? primarySurface,
+      brandDark: Color.lerp(brandDark, other.brandDark, t) ?? brandDark,
+      brandButtonBg:
+          Color.lerp(brandButtonBg, other.brandButtonBg, t) ?? brandButtonBg,
+      brandButtonFg:
+          Color.lerp(brandButtonFg, other.brandButtonFg, t) ?? brandButtonFg,
+      headerGradientEnd:
+          Color.lerp(headerGradientEnd, other.headerGradientEnd, t) ??
+          headerGradientEnd,
+      pageBackground:
+          Color.lerp(pageBackground, other.pageBackground, t) ?? pageBackground,
+      cardBackground:
+          Color.lerp(cardBackground, other.cardBackground, t) ?? cardBackground,
+      inputFill: Color.lerp(inputFill, other.inputFill, t) ?? inputFill,
+      imagePlaceholder:
+          Color.lerp(imagePlaceholder, other.imagePlaceholder, t) ??
+          imagePlaceholder,
+      textPrimary: Color.lerp(textPrimary, other.textPrimary, t) ?? textPrimary,
+      textSecondary:
+          Color.lerp(textSecondary, other.textSecondary, t) ?? textSecondary,
+      divider: Color.lerp(divider, other.divider, t) ?? divider,
+      starActive: Color.lerp(starActive, other.starActive, t) ?? starActive,
+      starSurface: Color.lerp(starSurface, other.starSurface, t) ?? starSurface,
+      badge: Color.lerp(badge, other.badge, t) ?? badge,
+      success: Color.lerp(success, other.success, t) ?? success,
+      successSurface:
+          Color.lerp(successSurface, other.successSurface, t) ?? successSurface,
+      merged: Color.lerp(merged, other.merged, t) ?? merged,
+      mergedSurface:
+          Color.lerp(mergedSurface, other.mergedSurface, t) ?? mergedSurface,
+      link: Color.lerp(link, other.link, t) ?? link,
+      barShadow: Color.lerp(barShadow, other.barShadow, t) ?? barShadow,
+      codeBackground:
+          Color.lerp(codeBackground, other.codeBackground, t) ?? codeBackground,
+    );
+  }
+}
+
+/// 便捷从 `BuildContext` 获取当前生效的动态语义色板
+extension AppThemeContext on BuildContext {
+  AppThemePalette get appColors =>
+      Theme.of(this).extension<AppThemePalette>() ??
+      (Theme.of(this).brightness == Brightness.dark
+          ? AppThemePalette.dark
+          : AppThemePalette.light);
+}
