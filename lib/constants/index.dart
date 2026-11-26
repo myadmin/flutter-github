@@ -80,6 +80,7 @@ class HttpConstants {
   // 搜索
   static const String searchRepositories = '/search/repositories';
   static const String searchUsers = '/search/users';
+  static const String searchIssues = '/search/issues';
 
   // 仓库资源
   static const String repos = '/repos';

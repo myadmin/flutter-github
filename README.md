@@ -16,7 +16,7 @@
 - **项目查看与 Star 互动**：
   - **仓库详情**：概览信息、Topic 标签、开源协议、代码浏览 / Issues / Commits 导航、Markdown README 渲染（自动修正相对图片路径，SVG 徽章优雅降级）；
   - **点 Star / 取消 Star**：未登录拦截跳转登录页，已登录支持**乐观更新 + 失败回滚**，并通过 `StarSyncController` 在探索页、搜索页、我的 Star 与详情页之间实时联动；
-  - **代码与 Issue 浏览**：支持分支切换、目录树下钻、带行号源码查看、图片预览、Commit SHA 复制、Issue 列表与详情评论提交、开发者主页与 Follow 互动。
+  - **代码与 Issue 浏览**：支持分支切换、目录树下钻、带行号源码查看、图片预览、Commit SHA 复制、Issue 列表（含仓内全量 Issues / PR 关键词与 `#编号` 搜索）与详情评论提交、开发者主页与 Follow 互动。
 
 ## 目录结构
 

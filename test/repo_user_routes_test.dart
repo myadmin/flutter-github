@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gh_explorer/api/issue.dart';
 import 'package:gh_explorer/models/user.dart';
 import 'package:gh_explorer/pages/RepoCommits/index.dart';
 import 'package:gh_explorer/pages/RepoDetail/index.dart';
@@ -181,6 +182,85 @@ void main() {
     await tester.tap(find.text('发送'));
     await tester.pumpAndSettle();
     expect(find.textContaining('New comment text'), findsOneWidget);
+  });
+
+  testWidgets('RepoIssuesPage 支持搜索当前项目全部 Issues/PR 及状态切换与清空恢复', (tester) async {
+    expect(
+      buildRepoIssueSearchQuery(
+        owner: 'flutter',
+        repo: 'flutter',
+        keyword: '#43475',
+        state: 'all',
+      ),
+      'repo:flutter/flutter 43475',
+    );
+    expect(
+      buildRepoIssueSearchQuery(
+        owner: 'flutter',
+        repo: 'flutter',
+        keyword: 'thread',
+        state: 'closed',
+      ),
+      'repo:flutter/flutter is:closed thread',
+    );
+
+    final mock = installMock((options) {
+      if (options.path == '/search/issues') {
+        final q = options.queryParameters['q']?.toString() ?? '';
+        // Open 下搜 crash 返回空，引导切到 All 命中已关闭 Issue
+        if (q.contains('is:open')) {
+          return jsonResponse({'total_count': 0, 'items': <dynamic>[]});
+        }
+        return jsonResponse({
+          'total_count': 1,
+          'items': [
+            issueJson(
+              number: 43475,
+              title: 'Closed crash on startup',
+              state: 'closed',
+            ),
+          ],
+        });
+      }
+      if (options.path == '/repos/flutter/flutter/issues') {
+        return jsonResponse([issueJson(title: 'Default open issue')]);
+      }
+      return jsonResponse(<String, dynamic>{});
+    });
+
+    await tester.pumpWidget(
+      buildTestApp(const RepoIssuesPage(owner: 'flutter', repoName: 'flutter')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Default open issue'), findsOneWidget);
+
+    // 在 Open 状态输入关键词搜索，返回空后通过引导按钮一键切换 All 状态命中已关闭记录
+    await tester.enterText(find.byType(TextField), 'crash');
+    await tester.tap(find.text('搜索'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('未找到“crash”相关记录'), findsOneWidget);
+    expect(find.text('在 All 中搜索'), findsOneWidget);
+
+    await tester.tap(find.text('在 All 中搜索'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Closed crash on startup'), findsOneWidget);
+    expect(find.text('共 1 条'), findsOneWidget);
+    expect(
+      mock.requests.any(
+        (r) =>
+            r.path == '/search/issues' &&
+            r.queryParameters['q'] == 'repo:flutter/flutter crash',
+      ),
+      isTrue,
+    );
+
+    // 点击清空搜索按钮恢复常规列表
+    await tester.tap(find.byTooltip('清空搜索'));
+    await tester.pumpAndSettle();
+    expect(find.text('Default open issue'), findsOneWidget);
+    expect(find.text('共 1 条'), findsNothing);
   });
 
   testWidgets('UserDetailPage Follow 互动与 UserFollowsPage 渲染', (tester) async {

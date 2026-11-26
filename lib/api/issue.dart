@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/issue.dart';
 import 'package:gh_explorer/models/parsers.dart';
@@ -7,6 +9,66 @@ import 'package:gh_explorer/utils/paged_list.dart';
 /// 拼接指定仓库 Issues 接口基础路径
 String _issuesBase(String owner, String repo) =>
     '${HttpConstants.repos}/${Uri.encodeComponent(owner.trim())}/${Uri.encodeComponent(repo.trim())}/issues';
+
+/// 构造在当前仓库范围内搜索全部 Issues / PR 的 GitHub Search 查询串
+String buildRepoIssueSearchQuery({
+  required String owner,
+  required String repo,
+  required String keyword,
+  String state = 'open',
+}) {
+  var cleanKeyword = keyword.trim();
+  // 支持输入 `#43475` 形式的编号检索，去掉前导 `#` 以提升 GitHub Search 命中率
+  if (RegExp(r'^#\d+$').hasMatch(cleanKeyword)) {
+    cleanKeyword = cleanKeyword.substring(1);
+  }
+
+  final parts = <String>['repo:${owner.trim()}/${repo.trim()}'];
+  final lower = cleanKeyword.toLowerCase();
+  final hasExplicitState =
+      lower.contains('is:open') || lower.contains('is:closed');
+  if (!hasExplicitState) {
+    if (state == 'open') {
+      parts.add('is:open');
+    } else if (state == 'closed') {
+      parts.add('is:closed');
+    }
+  }
+  if (cleanKeyword.isNotEmpty) {
+    parts.add(cleanKeyword);
+  }
+  return parts.join(' ');
+}
+
+/// 在当前仓库的全部 Issues 与 PR 中按关键词或编号搜索（基于 `/search/issues`）
+Future<PageResult<IssueItem>> searchRepoIssuesAPI(
+  String owner,
+  String repo, {
+  required String keyword,
+  String state = 'open',
+  int page = 1,
+  int perPage = GlobalConstants.defaultPageSize,
+  void Function(int totalCount)? onTotalCount,
+}) async {
+  final q = buildRepoIssueSearchQuery(
+    owner: owner,
+    repo: repo,
+    keyword: keyword,
+    state: state,
+  );
+  final raw = asMap(
+    await dioRequest.get(
+      HttpConstants.searchIssues,
+      params: {'q': q, 'order': 'desc', 'page': page, 'per_page': perPage},
+    ),
+  );
+  final totalCount = asInt(raw['total_count']);
+  onTotalCount?.call(totalCount);
+  final items = asList(raw['items'], IssueItem.fromJson);
+  final cappedTotal = math.min(totalCount, 1000);
+  final hasMore = page * perPage < cappedTotal && items.isNotEmpty;
+  return PageResult<IssueItem>(items: items, page: page, hasMore: hasMore);
+}
 
 /// 获取仓库 Issue / PR 列表
 Future<PageResult<IssueItem>> getRepoIssuesAPI(

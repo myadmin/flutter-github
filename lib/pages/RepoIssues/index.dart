@@ -30,18 +30,37 @@ class RepoIssuesPage extends StatefulWidget {
 
 class _RepoIssuesPageState extends State<RepoIssuesPage> {
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _keywordController = TextEditingController();
 
   String _state = 'open';
+  String _activeQuery = '';
+  int? _searchTotalCount;
 
   late final PagedListController<IssueItem> _list =
       PagedListController<IssueItem>(
         pageSize: GlobalConstants.defaultPageSize,
-        loader: (page) => getRepoIssuesAPI(
-          widget.owner,
-          widget.repoName,
-          state: _state,
-          page: page,
-        ),
+        loader: (page) {
+          if (_activeQuery.isNotEmpty) {
+            return searchRepoIssuesAPI(
+              widget.owner,
+              widget.repoName,
+              keyword: _activeQuery,
+              state: _state,
+              page: page,
+              onTotalCount: (total) {
+                if (mounted) {
+                  setState(() => _searchTotalCount = total);
+                }
+              },
+            );
+          }
+          return getRepoIssuesAPI(
+            widget.owner,
+            widget.repoName,
+            state: _state,
+            page: page,
+          );
+        },
         firstPageErrorFallback: '加载 Issues 失败',
         onLoadMoreError: (msg) {
           if (mounted) ToastUtils.showToast(context, msg);
@@ -60,6 +79,7 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _keywordController.dispose();
     _list.dispose();
     super.dispose();
   }
@@ -73,10 +93,49 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
     }
   }
 
-  /// 切换 Issue 状态筛选（Open / Closed / All）并刷新列表
+  /// 切换 Issue 状态筛选（Open / Closed / All）并刷新列表或搜索结果
   void _switchState(String next) {
     if (_state == next) return;
-    setState(() => _state = next);
+    setState(() {
+      _state = next;
+      _searchTotalCount = null;
+    });
+    _list.clear();
+    _list.refresh();
+  }
+
+  /// 在当前仓库全部 Issues 与 PR 中执行关键词检索
+  void _submitSearch() {
+    final text = _keywordController.text.trim();
+    if (text.isEmpty) {
+      if (_activeQuery.isNotEmpty) {
+        _clearSearch();
+      } else {
+        ToastUtils.showToast(context, '请输入关键词或 Issue 编号');
+      }
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _activeQuery = text;
+      _searchTotalCount = null;
+    });
+    _list.clear();
+    _list.refresh();
+  }
+
+  /// 清空搜索词并恢复当前状态下的常规列表浏览
+  void _clearSearch() {
+    _keywordController.clear();
+    FocusScope.of(context).unfocus();
+    if (_activeQuery.isEmpty) {
+      setState(() {});
+      return;
+    }
+    setState(() {
+      _activeQuery = '';
+      _searchTotalCount = null;
+    });
     _list.clear();
     _list.refresh();
   }
@@ -102,27 +161,99 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
               Container(
                 width: double.infinity,
                 color: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                child: Wrap(
-                  spacing: 8,
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ChoiceChip(
-                      label: const Text('Open'),
-                      selected: _state == 'open',
-                      onSelected: (_) => _switchState('open'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _keywordController,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (_) => _submitSearch(),
+                            onChanged: (_) => setState(() {}),
+                            decoration: InputDecoration(
+                              hintText: '搜索当前项目全部 Issues / PR（如关键词或 #编号）',
+                              hintStyle: AppTextStyles.caption,
+                              isDense: true,
+                              prefixIcon: const Icon(Icons.search, size: 19),
+                              suffixIcon:
+                                  _keywordController.text.isNotEmpty ||
+                                      _activeQuery.isNotEmpty
+                                  ? IconButton(
+                                      onPressed: _clearSearch,
+                                      icon: const Icon(Icons.clear, size: 18),
+                                      tooltip: '清空搜索',
+                                    )
+                                  : null,
+                              filled: true,
+                              fillColor: AppColors.inputFill,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 9,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.pill,
+                                ),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: _submitSearch,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.brandDark,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: const StadiumBorder(),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 11,
+                            ),
+                          ),
+                          child: const Text('搜索'),
+                        ),
+                      ],
                     ),
-                    ChoiceChip(
-                      label: const Text('Closed'),
-                      selected: _state == 'closed',
-                      onSelected: (_) => _switchState('closed'),
-                    ),
-                    ChoiceChip(
-                      label: const Text('All'),
-                      selected: _state == 'all',
-                      onSelected: (_) => _switchState('all'),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Wrap(
+                            spacing: 8,
+                            children: [
+                              ChoiceChip(
+                                label: const Text('Open'),
+                                selected: _state == 'open',
+                                onSelected: (_) => _switchState('open'),
+                              ),
+                              ChoiceChip(
+                                label: const Text('Closed'),
+                                selected: _state == 'closed',
+                                onSelected: (_) => _switchState('closed'),
+                              ),
+                              ChoiceChip(
+                                label: const Text('All'),
+                                selected: _state == 'all',
+                                onSelected: (_) => _switchState('all'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_activeQuery.isNotEmpty &&
+                            _searchTotalCount != null)
+                          Text(
+                            '共 $_searchTotalCount 条',
+                            style: AppTextStyles.captionSmall.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -148,6 +279,17 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
       return AppErrorView(message: _list.errorMessage, onRetry: _list.refresh);
     }
     if (_list.isEmpty) {
+      if (_activeQuery.isNotEmpty) {
+        return HmEmptyView(
+          icon: Icons.search_off_outlined,
+          title: '未找到“$_activeQuery”相关记录',
+          description: _state == 'all'
+              ? '试试更换关键词或 Issue 编号'
+              : '当前仅筛选 $_state 状态，可在全部状态中继续查找',
+          actionText: _state == 'all' ? '清除搜索' : '在 All 中搜索',
+          onAction: _state == 'all' ? _clearSearch : () => _switchState('all'),
+        );
+      }
       return HmEmptyView(
         icon: Icons.check_circle_outline,
         title: '暂无 $_state 状态的记录',
