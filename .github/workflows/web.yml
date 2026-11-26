@@ -14,6 +14,8 @@ on:
     paths-ignore:
       - "**.md"
       - "docs/**"
+      - "android/**"
+      - ".github/workflows/android.yml"
       - "LICENSE"
       - ".gitignore"
       - ".gitattributes"
@@ -23,6 +25,8 @@ on:
     paths-ignore:
       - "**.md"
       - "docs/**"
+      - "android/**"
+      - ".github/workflows/android.yml"
       - "LICENSE"
       - ".gitignore"
       - ".gitattributes"
@@ -107,6 +111,28 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      - name: Verify GitHub Pages configuration
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          HTTP_CODE=$(curl -sS -o pages.json -w "%{http_code}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages" || true)
+          if [ "$HTTP_CODE" = "404" ]; then
+            echo "::error::仓库尚未开启 GitHub Pages，请前往 Settings -> Pages -> Source 选择 GitHub Actions 后重试。"
+            exit 1
+          fi
+          if [ "$HTTP_CODE" = "200" ]; then
+            BUILD_TYPE=$(sed -n 's/.*"build_type"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' pages.json | head -1)
+            echo "::notice::GitHub Pages 当前 build_type=${BUILD_TYPE:-unknown}"
+            if [ -n "$BUILD_TYPE" ] && [ "$BUILD_TYPE" != "workflow" ]; then
+              echo "::error::当前 GitHub Pages 的 Source 为 ${BUILD_TYPE}（分支部署），请前往 Settings -> Pages -> Build and deployment -> Source 切换为 GitHub Actions。"
+              exit 1
+            fi
+          fi
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
