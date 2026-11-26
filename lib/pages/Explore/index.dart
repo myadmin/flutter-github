@@ -17,7 +17,7 @@ import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/footprint.dart';
 import 'package:gh_explorer/models/repo.dart';
-import 'package:gh_explorer/pages/Explore/explore_config.dart';
+import 'package:gh_explorer/constants/explore_config.dart';
 import 'package:gh_explorer/pages/Explore/skeleton.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
 import 'package:gh_explorer/stores/explore_tags_controller.dart';

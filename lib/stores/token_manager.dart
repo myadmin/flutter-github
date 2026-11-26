@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:gh_explorer/constants/index.dart';
+import 'package:gh_explorer/utils/auth_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 敏感凭证的读写抽象，便于在单测中注入内存实现。
@@ -82,7 +83,11 @@ class SecureSecretStore implements SecretStore {
 /// 历史版本遗留的明文令牌迁移到安全存储后删除明文副本。
 class TokenManager {
   TokenManager({SecretStore secretStore = const SecureSecretStore()})
-    : _store = secretStore;
+    : _store = secretStore {
+    // 向网络层暴露凭证读写钩子，避免 utils 反向依赖 stores
+    authTokenReader = getToken;
+    authTokenClearer = removeToken;
+  }
 
   SecretStore _store;
 

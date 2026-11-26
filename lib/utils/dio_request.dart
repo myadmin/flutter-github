@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:gh_explorer/constants/index.dart';
-import 'package:gh_explorer/stores/token_manager.dart';
+import 'package:gh_explorer/utils/auth_session.dart';
 import 'package:gh_explorer/utils/api_exception.dart';
 import 'package:gh_explorer/utils/formatters.dart';
 
@@ -80,7 +80,7 @@ class DioRequest {
         onRequest: (request, handler) {
           // 允许调用方显式指定临时 Authorization（例如登录前验证 PAT）
           if (!request.headers.containsKey('Authorization')) {
-            final token = tokenManager.getToken();
+            final token = authTokenReader?.call() ?? '';
             if (token.isNotEmpty) {
               request.headers['Authorization'] = 'Bearer $token';
             }
@@ -167,7 +167,7 @@ class DioRequest {
 
     if (statusCode == 401) {
       if (!skipRedirect) {
-        await tokenManager.removeToken();
+        await authTokenClearer?.call();
         onUnauthorized?.call();
         return NetworkException('GitHub 凭证已失效，请重新登录');
       }

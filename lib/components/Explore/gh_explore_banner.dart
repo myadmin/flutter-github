@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
-import 'package:gh_explorer/pages/Explore/explore_config.dart';
+import 'package:gh_explorer/constants/explore_config.dart';
 
 /// 探索首页顶部精选专题轮播 Banner（参考 hm_shop HmSlider 自动轮播与页面切换暂停机制）
 class GhExploreBanner extends StatefulWidget {

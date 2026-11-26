@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
-import 'package:gh_explorer/pages/Explore/explore_config.dart';
+import 'package:gh_explorer/constants/explore_config.dart';
 
 /// 探索首页热门技术领域横滑快捷入口（参考 hm_shop HmCategory 横滑分类条，0 API 请求开销）
 class GhTopicGrid extends StatelessWidget {

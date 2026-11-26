@@ -3,7 +3,7 @@ import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/parsers.dart';
 import 'package:gh_explorer/models/repo.dart';
 import 'package:gh_explorer/models/user.dart';
-import 'package:gh_explorer/stores/rate_limit_controller.dart';
+import 'package:gh_explorer/models/rate_limit_state.dart';
 import 'package:gh_explorer/utils/dio_request.dart';
 import 'package:gh_explorer/utils/paged_list.dart';
 

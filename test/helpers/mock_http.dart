@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:gh_explorer/pages/Explore/explore_config.dart';
+import 'package:gh_explorer/constants/explore_config.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
 import 'package:gh_explorer/routes/index.dart';
 import 'package:gh_explorer/stores/explore_tags_controller.dart';

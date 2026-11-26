@@ -8,7 +8,7 @@ import 'package:gh_explorer/components/Explore/gh_topic_grid.dart';
 import 'package:gh_explorer/components/common/gh_repo_card.dart';
 import 'package:gh_explorer/models/footprint.dart';
 import 'package:gh_explorer/models/repo.dart';
-import 'package:gh_explorer/pages/Explore/explore_config.dart';
+import 'package:gh_explorer/constants/explore_config.dart';
 import 'package:gh_explorer/pages/Explore/index.dart';
 import 'package:gh_explorer/pages/Explore/skeleton.dart';
 import 'package:gh_explorer/routes/index.dart';

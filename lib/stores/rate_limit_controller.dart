@@ -1,21 +1,7 @@
 import 'package:get/get.dart';
+import 'package:gh_explorer/models/rate_limit_state.dart';
 
-/// GitHub API 速率限制状态快照
-class RateLimitState {
-  const RateLimitState({
-    required this.limit,
-    required this.remaining,
-    this.resetAt,
-  });
-
-  const RateLimitState.initial() : limit = 60, remaining = 60, resetAt = null;
-
-  final int limit;
-  final int remaining;
-  final DateTime? resetAt;
-
-  bool get isKnown => limit > 0;
-}
+export 'package:gh_explorer/models/rate_limit_state.dart';
 
 /// 跨页面共享当前 GitHub API 配额剩余情况（区分 core 与 search，由 Dio 拦截器自动更新）
 class RateLimitController extends GetxController {
