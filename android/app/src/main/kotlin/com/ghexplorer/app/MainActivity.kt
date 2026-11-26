@@ -1,4 +1,4 @@
-package com.example.gh_explorer
+package com.ghexplorer.app
 
 import android.content.Intent
 import android.net.Uri
@@ -16,7 +16,7 @@ import java.io.File
  */
 class MainActivity : FlutterActivity() {
     companion object {
-        private const val CHANNEL_NAME = "com.example.gh_explorer/app_installer"
+        private const val CHANNEL_NAME = "com.ghexplorer.app/app_installer"
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

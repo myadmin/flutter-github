@@ -32,7 +32,7 @@ class AppInstaller {
 
   /// 原生通道名称，与 Android `MainActivity.kt` 中声明保持一致
   static const MethodChannel channel = MethodChannel(
-    'com.example.gh_explorer/app_installer',
+    'com.ghexplorer.app/app_installer',
   );
 
   /// 查询当前平台的更新缓存目录与设备支持的 CPU ABI 列表

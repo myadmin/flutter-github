@@ -439,7 +439,7 @@ void main() {
   });
 
   test('MethodChannel 在 Android 与非 Android 平台上分别返回对应安装状态', () async {
-    expect(AppInstaller.channel.name, 'com.example.gh_explorer/app_installer');
+    expect(AppInstaller.channel.name, 'com.ghexplorer.app/app_installer');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(AppInstaller.channel, (
           MethodCall call,

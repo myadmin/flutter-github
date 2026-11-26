@@ -11,6 +11,7 @@
 ### 新增与优化
 - **全局亮色 / 暗色 / 跟随系统主题切换**：新增 `ThemeController` 持久化主题设置，并在设置页集成「外观主题色（跟随系统 / 亮色 / 暗色）」实时切换卡片；扩展 `AppThemePalette`（`ThemeExtension`）与上下文响应式排版样式，实现全应用页面、卡片、导航栏、弹窗及代码高亮视图的深浅双主题适配。
 - **安全性与稳定性加固**：使用 `flutter_secure_storage` 加密存储 GitHub Token（支持历史明文凭证自动迁移），新增安装包 SHA-256 与文件体积校验、外部链接安全打开校验及 Android 明文传输/备份安全配置，并补充 `app_error_reporter` 统一异常上报与更完善的次级限流/大文件错误提示。
+- **应用标识统一**：Android `applicationId` / `namespace`、iOS 与 macOS Bundle Identifier、Windows 元信息及安装器 MethodChannel 统一为 `com.ghexplorer.app`，替换无法上架应用商店的 `com.example.*` 占位标识。
 
 ## [1.1.1] - 2026-11-26
 
