@@ -50,7 +50,7 @@ flutter build web --release
 | --- | --- | --- |
 | `.github/workflows/dart.yml` | push / PR 到 `master` | 格式校验、`--fatal-infos` 静态分析、单测与 80% 覆盖率门禁、`build web` 冒烟 |
 | `.github/workflows/web.yml` | push / PR 到 `master`、手动触发 | 构建 Web Release（按仓库名子路径 `--base-href`、精简 `*.symbols`、补充 `404.html` 深链兜底），上传 `gh-explorer-web` Artifact 并部署到 GitHub Pages |
-| `.github/workflows/android.yml` | push 到 `master`、`v*` 标签、手动触发 | 在 Ubuntu + JDK 17 环境构建分 ABI APK 与 AAB；上传 `gh-explorer-android` Artifact，并在打 `v*` 标签或手动勾选时发布 GitHub Release |
+| `.github/workflows/android.yml` | push 到 `master`、`v*` 标签、手动触发 | 在 Ubuntu + JDK 17 环境构建分 ABI APK 与 AAB；上传 `gh-explorer-android` Artifact 并自动发布到 GitHub Releases（标签使用 `v*` 或 `v<versionName>-build.<run_number>`） |
 
 - **GitHub Pages 说明**：如需自动部署在线预览页，请在 GitHub 仓库的 `Settings -> Pages -> Build and deployment -> Source` 中选择 **GitHub Actions**；未启用时 `build-web` 仍会产出可下载的 `gh-explorer-web` 构建产物。
 - **Android 正式签名（可选）**：未配置仓库 Secrets 时自动回退为 debug 签名（可直接装机试用）；如需正式签名，配置 `ANDROID_KEYSTORE_BASE64`、`ANDROID_STORE_PASSWORD`、`ANDROID_KEY_PASSWORD`、`ANDROID_KEY_ALIAS` 即可自动切换（参考 `android/key.properties.example`）。
