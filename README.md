@@ -53,5 +53,6 @@ flutter build web --release
 | `.github/workflows/android.yml` | push 到 `master`、`v*` 标签、手动触发 | 在 Ubuntu + JDK 17 环境构建分 ABI APK 与 AAB；上传 `gh-explorer-android` Artifact 并自动发布到 GitHub Releases（标签使用 `v*` 或 `v<versionName>-build.<run_number>`） |
 
 - **GitHub Pages 说明**：如需自动部署在线预览页，请在 GitHub 仓库的 `Settings -> Pages -> Build and deployment -> Source` 中选择 **GitHub Actions**；未启用时 `build-web` 仍会产出可下载的 `gh-explorer-web` 构建产物。
+- **更新说明生成机制**：发布 Release 时会自动提取 [CHANGELOG.md](CHANGELOG.md) 对应版本段落及上一版以来的 Git 提交记录，并在应用内更新弹窗中以「更新说明」渲染展示；手动运行也可填写 `release_notes` 自定义说明。
 - **Android 正式签名（可选）**：未配置仓库 Secrets 时自动回退为 debug 签名（可直接装机试用）；如需正式签名，配置 `ANDROID_KEYSTORE_BASE64`、`ANDROID_STORE_PASSWORD`、`ANDROID_KEY_PASSWORD`、`ANDROID_KEY_ALIAS` 即可自动切换（参考 `android/key.properties.example`）。
 - **Release 权限说明**：通过标签或手动触发创建 Release 需要 GitHub 仓库 `Settings -> Actions -> General -> Workflow permissions` 允许读写权限（`Read and write permissions`）。

@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:gh_explorer/components/common/gh_markdown_view.dart';
 import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/models/app_release.dart';
@@ -182,22 +183,31 @@ class _GhUpdateDialogState extends State<_GhUpdateDialog> {
 
     switch (_stage) {
       case _UpdateDialogStage.ready:
-        return ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360, maxHeight: 320),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(summary, style: AppTextStyles.caption),
-                if (widget.release.notes.trim().isNotEmpty) ...[
+        final summaryNotes = widget.release.updateSummaryNotes;
+        final displayNotes = summaryNotes.isNotEmpty
+            ? summaryNotes
+            : '包含最新功能优化与问题修复，建议更新体验。';
+        return SizedBox(
+          width: 320,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 320),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(summary, style: AppTextStyles.caption),
                   const SizedBox(height: 10),
-                  Text(
-                    widget.release.notes.trim(),
-                    style: AppTextStyles.bodySmall.copyWith(height: 1.55),
+                  const Text('更新说明', style: AppTextStyles.bodyStrong),
+                  const SizedBox(height: 6),
+                  GhMarkdownView(
+                    data: displayNotes,
+                    owner: 'myadmin',
+                    repo: 'flutter-github',
+                    branch: 'master',
                   ),
                 ],
-              ],
+              ),
             ),
           ),
         );

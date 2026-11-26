@@ -24,6 +24,10 @@ on:
         description: "发布使用的 tag（留空默认 v<versionName>-build.<run_number>）"
         type: string
         required: false
+      release_notes:
+        description: "自定义本次更新说明（留空则自动读取 CHANGELOG.md 与提交记录）"
+        type: string
+        required: false
 
 # 同一分支连续推送时取消排队中的旧构建，节省 CI 资源
 concurrency:
@@ -41,6 +45,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 拉取完整提交与标签历史，便于自动生成两个 Release 之间的更新日志
+          fetch-depth: 0
 
       - name: Set up JDK 17
         # AGP 9.1.0 / Kotlin 2.4 要求 JDK 17，显式固定 Runner Java 版本
@@ -170,6 +177,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 拉取完整提交与标签历史，便于自动生成两个 Release 之间的更新日志
+          fetch-depth: 0
 
       - name: Download Android artifacts
         uses: actions/download-artifact@v4
@@ -204,6 +214,8 @@ jobs:
           echo "::notice::发布 Tag：${TAG}"
 
       - name: Compose release notes
+        env:
+          INPUT_NOTES: ${{ inputs.release_notes }}
         run: |
           set -euo pipefail
           ANDROID_SIGNING="debug 签名（可直接装机试用；配置 ANDROID_KEYSTORE_BASE64 等 Secrets 后切换正式签名）"
@@ -211,7 +223,55 @@ jobs:
             ANDROID_SIGNING="release 正式签名"
           fi
 
-          cat <<NOTES > release-notes.md
+          # 1. 尝试从 CHANGELOG.md 提取与当前 Tag 或版本名对应的更新段落
+          CHANGELOG_SECTION=""
+          if [ -z "${INPUT_NOTES:-}" ] && [ -f CHANGELOG.md ]; then
+            for KEY in "$TAG" "${APP_VERSION_NAME:-}"; do
+              [ -z "$KEY" ] && continue
+              CHANGELOG_SECTION=$(awk -v ver="$KEY" '
+                index($0, "## [" ver "]") == 1 { inside = 1; next }
+                inside && index($0, "## [") == 1 { exit }
+                inside { lines[++n] = $0 }
+                END {
+                  start = 1; while (start <= n && lines[start] ~ /^[[:space:]]*$/) start++
+                  end = n; while (end >= start && lines[end] ~ /^[[:space:]]*$/) end--
+                  for (i = start; i <= end; i++) print lines[i]
+                }
+              ' CHANGELOG.md | tr -d '\r')
+              if [ -n "$CHANGELOG_SECTION" ]; then
+                break
+              fi
+            done
+          fi
+
+          # 2. 自动提取上一个 Release Tag 至当前提交的改动列表
+          COMMIT_LOG=""
+          PREV_TAG=$(git describe --tags --abbrev=0 --exclude="$TAG" "${GITHUB_SHA}^" 2>/dev/null || true)
+          if [ -n "$PREV_TAG" ]; then
+            COMMIT_LOG=$(git log "${PREV_TAG}..${GITHUB_SHA}" --no-merges --pretty=format:"- %s (\`%h\`)" || true)
+          else
+            COMMIT_LOG=$(git log -n 10 --no-merges --pretty=format:"- %s (\`%h\`)" || true)
+          fi
+
+          # 3. 组装「本次更新」正文：手动输入 > 正式标签匹配 CHANGELOG > 自动提交日志 > CHANGELOG 兜底
+          UPDATE_NOTES=""
+          if [ -n "${INPUT_NOTES:-}" ]; then
+            UPDATE_NOTES="$INPUT_NOTES"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]] && [ -n "$CHANGELOG_SECTION" ]; then
+            UPDATE_NOTES="$CHANGELOG_SECTION"
+          elif [ -n "$COMMIT_LOG" ]; then
+            UPDATE_NOTES="$COMMIT_LOG"
+          elif [ -n "$CHANGELOG_SECTION" ]; then
+            UPDATE_NOTES="$CHANGELOG_SECTION"
+          else
+            UPDATE_NOTES="- 构建版本 \`${TAG}\`（日常更新与稳定性优化）"
+          fi
+
+          {
+            echo "## 本次更新（${TAG}）"
+            echo
+            printf '%s\n\n' "$UPDATE_NOTES"
+            cat <<NOTES
           ## Android 安装包
 
           | 文件 | 适用设备 |
@@ -227,8 +287,10 @@ jobs:
           ## 安装说明
 
           1. 下载对应架构的 \`.apk\` 文件（现代手机优先选择 \`arm64-v8a\`）；
-          2. 首次安装需在系统设置中允许「安装未知来源应用」。
+          2. 首次安装需在系统设置中允许「安装未知来源应用」；
+          3. 本版已支持应用内自动检查更新，后续发现新版可在弹窗内直接下载并调起安装。
           NOTES
+          } > release-notes.md
 
       - name: Upload assets to release
         env:
@@ -245,11 +307,12 @@ jobs:
           printf '  %s\n' "${FILES[@]}"
 
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            echo "Release ${TAG} 已存在，覆盖更新安装包资产"
+            echo "Release ${TAG} 已存在，覆盖更新安装包资产与更新说明"
             OUT=$(gh release upload "$TAG" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY" 2>&1) || {
               echo "::error::gh release upload 失败：$(echo "$OUT" | tr '\n' ' ' | cut -c1-800)"
               exit 1
             }
+            gh release edit "$TAG" --notes-file release-notes.md --repo "$GITHUB_REPOSITORY" || true
           else
             TARGET_ARGS=()
             if [ "$TAG_EXISTS" != "true" ]; then

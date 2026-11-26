@@ -102,6 +102,59 @@ class AppRelease {
     return versionName.isNotEmpty ? 'v$versionName' : tagName;
   }
 
+  /// 提取适合在应用内弹窗展示的更新说明（优先抽取 `## 本次更新` 段落，剔除安装包下载表格与冗余尾部指引）
+  String get updateSummaryNotes {
+    final trimmed = notes.trim();
+    if (trimmed.isEmpty) return '';
+
+    final lines = trimmed.replaceAll('\r\n', '\n').split('\n');
+    final extracted = <String>[];
+    var inUpdateSection = false;
+    var foundUpdateHeading = false;
+
+    for (final line in lines) {
+      final t = line.trim();
+      if (t.startsWith('## ')) {
+        final heading = t.substring(3).trim();
+        if (heading.startsWith('本次更新') ||
+            heading.startsWith('更新说明') ||
+            heading.startsWith('更新内容') ||
+            heading.toLowerCase().startsWith("what's changed")) {
+          foundUpdateHeading = true;
+          inUpdateSection = true;
+          continue;
+        }
+        if (inUpdateSection) {
+          break;
+        }
+      }
+      if (inUpdateSection) {
+        extracted.add(line);
+      }
+    }
+
+    if (foundUpdateHeading) {
+      return extracted.join('\n').trim();
+    }
+
+    // 若 Release 正文未分节，过滤掉 CI 附带的「Android 安装包 / 安装说明」固定章节
+    final fallback = <String>[];
+    var skipBoilerplate = false;
+    for (final line in lines) {
+      final t = line.trim();
+      if (t.startsWith('## ')) {
+        final heading = t.substring(3).trim();
+        skipBoilerplate =
+            heading.startsWith('Android 安装包') || heading.startsWith('安装说明');
+        if (skipBoilerplate) continue;
+      }
+      if (!skipBoilerplate) {
+        fallback.add(line);
+      }
+    }
+    return fallback.join('\n').trim();
+  }
+
   /// 根据当前设备支持的 ABI 优先级挑选最匹配的 `.apk` 产物
   ReleaseAsset? pickAndroidApkAsset({
     List<String> supportedAbis = const ['arm64-v8a', 'armeabi-v7a', 'x86_64'],

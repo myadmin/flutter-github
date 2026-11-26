@@ -89,6 +89,47 @@ void main() {
 
     final arm32 = release.pickAndroidApkAsset(supportedAbis: ['armeabi-v7a']);
     expect(arm32?.name, 'app-armeabi-v7a-release.apk');
+
+    // 验证从完整 GitHub Release 正文中抽取「本次更新」段落并剔除安装包表格
+    final structuredRelease = AppRelease.fromJson(
+      releaseJson(
+        body: '''## 本次更新（v1.0.0-build.5）
+
+- 新增更新说明 Markdown 渲染 (`abc1234`)
+- 优化弹窗进度显示
+
+## Android 安装包
+
+| 文件 | 适用设备 |
+| --- | --- |
+| `app-arm64-v8a-release.apk` | 现代手机 |
+
+## 安装说明
+
+1. 允许安装未知来源应用。''',
+      ),
+    );
+    expect(
+      structuredRelease.updateSummaryNotes,
+      contains('新增更新说明 Markdown 渲染'),
+    );
+    expect(
+      structuredRelease.updateSummaryNotes,
+      isNot(contains('Android 安装包')),
+    );
+    expect(structuredRelease.updateSummaryNotes, isNot(contains('安装说明')));
+
+    // 验证无标准分段时过滤样板表格保留纯文本说明
+    final fallbackRelease = AppRelease.fromJson(
+      releaseJson(
+        body: '''修复网络超时问题。
+
+## Android 安装包
+
+| 文件 | 适用设备 |''',
+      ),
+    );
+    expect(fallbackRelease.updateSummaryNotes, '修复网络超时问题。');
   });
 
   test('fetchLatestReleaseAPI 正确请求 GitHub latest release 接口', () async {
@@ -224,7 +265,19 @@ void main() {
             return Scaffold(
               body: ElevatedButton(
                 onPressed: () async {
-                  final release = AppRelease.fromJson(releaseJson());
+                  final release = AppRelease.fromJson(
+                    releaseJson(
+                      body: '''## 本次更新（v1.0.0-build.5）
+
+- 支持应用内自动下载安装包
+
+## Android 安装包
+
+| 文件 | 适用设备 |
+| --- | --- |
+| `app-arm64-v8a-release.apk` | 现代手机 |''',
+                    ),
+                  );
                   await showGhUpdateDialog(
                     context,
                     release: release,
@@ -245,6 +298,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('发现新版本 v1.0.0 (build 5)'), findsOneWidget);
+    expect(find.text('更新说明'), findsOneWidget);
+    expect(find.textContaining('支持应用内自动下载安装包'), findsOneWidget);
+    expect(find.textContaining('Android 安装包'), findsNothing);
     expect(find.text('立即更新'), findsOneWidget);
 
     await tester.tap(find.text('立即更新'));
