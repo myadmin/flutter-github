@@ -1,11 +1,11 @@
 {
-    "name": "gh_explorer",
-    "short_name": "gh_explorer",
+    "name": "GitHub 探索",
+    "short_name": "GitHub 探索",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0C121B",
+    "theme_color": "#0C121B",
+    "description": "GitHub 探索：开源项目浏览、代码阅读与 Issue 协作客户端",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

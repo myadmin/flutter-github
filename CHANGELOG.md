@@ -6,6 +6,12 @@
 - 打正式 `v*` 标签（例如 `v1.0.1`）或触发输入与标题匹配时，会优先提取本文件对应 `## [1.0.1]` 段落作为「本次更新」；
 - 日常推送到 `master`（自动生成 `v<versionName>-build.<run_number>`）时，会自动汇总上一版 Tag 至今的提交记录（或使用手动触发填写的更新说明）。
 
+## [1.1.1] - 2026-11-26
+
+### 新增与优化
+- **品牌应用图标全面焕新**：生成全新「GitHub 探索」图标并替换 Web（高清圆角 `favicon.png` 与 PWA `Icon-*` / `Icon-maskable-*`）、Android（传统圆角 `ic_launcher.png` 与 API 26+ 自适应图标 `ic_launcher_foreground.png` / `mipmap-anydpi-v26`）、iOS、macOS 及 Windows 全端应用图标。
+- **Web 元信息优化**：将 `web/index.html` 与 `web/manifest.json` 的页面标题、应用名称及主题色同步为 `GitHub 探索` 与 `#0C121B`。
+
 ## [1.1.0] - 2026-11-26
 
 ### 新增与优化
