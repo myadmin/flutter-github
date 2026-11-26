@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
@@ -101,6 +103,19 @@ void main() {
     });
   });
 
+  group('sha256OfFile', () {
+    test('计算本地文件 SHA-256 摘要', () async {
+      final dir = await Directory.systemTemp.createTemp('ghx_sha_');
+      addTearDown(() => dir.delete(recursive: true));
+      final file = File('${dir.path}/sample.apk');
+      await file.writeAsString('abc');
+
+      expect(
+        await sha256OfFile(file.path),
+        'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+      );
+    });
+  });
   group('深链参数守卫', () {
     testWidgets('缺少 owner/name 时回落到未知路由页并提示参数缺失', (tester) async {
       await tester.pumpWidget(
