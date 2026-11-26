@@ -64,7 +64,13 @@ String buildExploreQuery({
 
   final lang = language.trim();
   if (lang.isNotEmpty && lang != '全部') {
-    parts.add('language:$lang');
+    if (lang.contains(':')) {
+      parts.add(lang);
+    } else if (lang.contains(RegExp(r'\s'))) {
+      parts.add('language:"$lang"');
+    } else {
+      parts.add('language:$lang');
+    }
   }
   return parts.join(' ');
 }

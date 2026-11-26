@@ -130,17 +130,37 @@ Future<void> unfollowUserAPI(String login) async {
   await dioRequest.delete('${HttpConstants.userFollowing}/$encoded');
 }
 
-/// 主动查询当前 API 速率限制状态
-Future<RateLimitState> getRateLimitAPI() async {
-  final data = asMap(await dioRequest.get(HttpConstants.rateLimit));
-  final resources = asMapOrEmpty(data['resources']);
-  final core = asMapOrEmpty(resources['core']);
-  final resetEpoch = asInt(core['reset']);
+RateLimitState _parseRateBucket(
+  Map<String, dynamic> bucket, {
+  int defaultLimit = 60,
+}) {
+  final resetEpoch = asInt(bucket['reset']);
   return RateLimitState(
-    limit: asInt(core['limit'], fallback: 60),
-    remaining: asInt(core['remaining'], fallback: 60),
+    limit: asInt(bucket['limit'], fallback: defaultLimit),
+    remaining: asInt(bucket['remaining'], fallback: defaultLimit),
     resetAt: resetEpoch > 0
         ? DateTime.fromMillisecondsSinceEpoch(resetEpoch * 1000)
         : null,
   );
+}
+
+/// 主动查询当前核心与搜索 API 速率限制状态（`/rate_limit` 接口本身不消耗核心配额）
+Future<({RateLimitState core, RateLimitState? search})>
+getAllRateLimitsAPI() async {
+  final data = asMap(await dioRequest.get(HttpConstants.rateLimit));
+  final resources = asMapOrEmpty(data['resources']);
+  final coreMap = asMapOrEmpty(resources['core']);
+  final searchMap = asMapOrNull(resources['search']);
+  return (
+    core: _parseRateBucket(coreMap),
+    search: searchMap != null && searchMap.isNotEmpty
+        ? _parseRateBucket(searchMap, defaultLimit: 10)
+        : null,
+  );
+}
+
+/// 主动查询当前核心 API 速率限制状态
+Future<RateLimitState> getRateLimitAPI() async {
+  final all = await getAllRateLimitsAPI();
+  return all.core;
 }

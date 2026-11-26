@@ -12,6 +12,7 @@ import 'package:gh_explorer/pages/RepoFileView/index.dart';
 import 'package:gh_explorer/pages/RepoFiles/index.dart';
 import 'package:gh_explorer/pages/RepoIssueDetail/index.dart';
 import 'package:gh_explorer/pages/RepoIssues/index.dart';
+import 'package:gh_explorer/pages/Settings/index.dart';
 import 'package:gh_explorer/pages/Unknown/index.dart';
 import 'package:gh_explorer/pages/UserDetail/index.dart';
 import 'package:gh_explorer/pages/UserFollows/index.dart';
@@ -164,5 +165,6 @@ Map<String, Widget Function(BuildContext)> getRootRoutes() {
     AppRoutes.myStarsPath: (_) => const MyStarsPage(),
     AppRoutes.notificationsPath: (_) => const NotificationsPage(),
     AppRoutes.footprintPath: (_) => const FootprintPage(),
+    AppRoutes.settingsPath: (_) => const SettingsPage(),
   };
 }

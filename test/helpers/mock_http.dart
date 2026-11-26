@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:gh_explorer/pages/Explore/explore_config.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
 import 'package:gh_explorer/routes/index.dart';
+import 'package:gh_explorer/stores/explore_tags_controller.dart';
 import 'package:gh_explorer/stores/rate_limit_controller.dart';
 import 'package:gh_explorer/stores/star_sync_controller.dart';
 import 'package:gh_explorer/stores/user_controller.dart';
@@ -115,6 +116,7 @@ MockAdapter installAuthMock(
   UserController user,
   StarSyncController starSync,
   RateLimitController rateLimit,
+  ExploreTagsController exploreTags,
 })
 registerTestControllers() {
   Get.reset();
@@ -122,7 +124,13 @@ registerTestControllers() {
   final user = Get.put(UserController(), permanent: true);
   final starSync = Get.put(StarSyncController(), permanent: true);
   final rateLimit = Get.put(RateLimitController(), permanent: true);
-  return (user: user, starSync: starSync, rateLimit: rateLimit);
+  final exploreTags = Get.put(ExploreTagsController(), permanent: true);
+  return (
+    user: user,
+    starSync: starSync,
+    rateLimit: rateLimit,
+    exploreTags: exploreTags,
+  );
 }
 
 /// 构造测试用 GitHub 用户详情 JSON
@@ -379,10 +387,19 @@ Map<String, dynamic> rateLimitJson({
   int limit = 5000,
   int remaining = 4990,
   int reset = 1795619000,
+  int? searchLimit,
+  int? searchRemaining,
+  int? searchReset,
 }) {
   return {
     'resources': {
       'core': {'limit': limit, 'remaining': remaining, 'reset': reset},
+      if (searchLimit != null && searchRemaining != null)
+        'search': {
+          'limit': searchLimit,
+          'remaining': searchRemaining,
+          'reset': searchReset ?? reset,
+        },
     },
   };
 }

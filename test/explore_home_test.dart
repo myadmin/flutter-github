@@ -50,6 +50,15 @@ void main() {
     );
     expect(active, 'pushed:>2026-11-23 stars:>200');
 
+    expect(
+      buildExploreQuery(language: 'Jupyter Notebook', now: fixedNow),
+      contains('language:"Jupyter Notebook"'),
+    );
+    expect(
+      buildExploreQuery(language: 'topic:ai', now: fixedNow),
+      endsWith('topic:ai'),
+    );
+
     expect(ExploreShowcaseCache.cachedOwners, isNull);
     ExploreShowcaseCache.saveOwners([RepoOwner.fromJson(ownerJson())]);
     expect(ExploreShowcaseCache.cachedOwners?.length, 1);

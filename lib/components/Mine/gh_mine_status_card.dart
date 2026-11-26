@@ -8,6 +8,7 @@ class GhMineStatusCard extends StatelessWidget {
   const GhMineStatusCard({
     super.key,
     required this.rateLimit,
+    this.searchRateLimit,
     required this.scopes,
     required this.versionText,
     required this.onRefreshRateLimit,
@@ -16,6 +17,7 @@ class GhMineStatusCard extends StatelessWidget {
   });
 
   final RateLimitState rateLimit;
+  final RateLimitState? searchRateLimit;
   final List<String> scopes;
   final String versionText;
   final VoidCallback onRefreshRateLimit;
@@ -102,6 +104,26 @@ class GhMineStatusCard extends StatelessWidget {
               ),
             ],
           ),
+          if (searchRateLimit != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '搜索接口：剩余 ${searchRateLimit!.remaining} / ${searchRateLimit!.limit} 次',
+                  style: AppTextStyles.captionSmall.copyWith(
+                    color: searchRateLimit!.remaining <= 2
+                        ? AppColors.badge
+                        : AppColors.textSecondary,
+                  ),
+                ),
+                Text(
+                  '重置：${_formatResetTime(searchRateLimit!.resetAt)}',
+                  style: AppTextStyles.captionSmall,
+                ),
+              ],
+            ),
+          ],
           if (scopes.isNotEmpty) ...[
             const Divider(height: 22, color: AppColors.divider),
             const Text('当前 Token 权限范围', style: AppTextStyles.bodySmall),

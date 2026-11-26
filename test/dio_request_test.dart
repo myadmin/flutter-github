@@ -159,4 +159,54 @@ void main() {
       throwsA(isA<NetworkException>()),
     );
   });
+
+  test('search 接口速率限制不会覆盖 core 配额，onResourceRateLimitUpdate 区分资源域', () async {
+    int? coreLimit;
+    final recorded = <(String, int, int)>[];
+    DioRequest.onRateLimitUpdate =
+        ({required int limit, required int remaining, DateTime? resetAt}) {
+          coreLimit = limit;
+        };
+    DioRequest.onResourceRateLimitUpdate =
+        ({
+          required String resource,
+          required int limit,
+          required int remaining,
+          DateTime? resetAt,
+        }) {
+          recorded.add((resource, limit, remaining));
+        };
+
+    installMock((options) {
+      if (options.path == '/search/repositories') {
+        return jsonResponse(
+          {'items': <dynamic>[]},
+          headers: {
+            'x-ratelimit-resource': ['search'],
+            'x-ratelimit-limit': ['10'],
+            'x-ratelimit-remaining': ['6'],
+            'x-ratelimit-reset': ['1795619000'],
+          },
+        );
+      }
+      return jsonResponse(
+        {'login': 'octocat'},
+        headers: {
+          'x-ratelimit-resource': ['core'],
+          'x-ratelimit-limit': ['60'],
+          'x-ratelimit-remaining': ['56'],
+          'x-ratelimit-reset': ['1795619000'],
+        },
+      );
+    });
+
+    await dioRequest.get('/search/repositories');
+    expect(coreLimit, isNull);
+    expect(recorded, [('search', 10, 6)]);
+
+    await dioRequest.get('/user');
+    expect(coreLimit, 60);
+    expect(recorded, [('search', 10, 6), ('core', 60, 56)]);
+    DioRequest.onResourceRateLimitUpdate = null;
+  });
 }

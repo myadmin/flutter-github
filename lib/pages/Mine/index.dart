@@ -1,8 +1,11 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:gh_explorer/api/user.dart';
 import 'package:gh_explorer/components/Mine/gh_mine_header.dart';
 import 'package:gh_explorer/components/Mine/gh_mine_quick_actions.dart';
+import 'package:gh_explorer/components/Mine/gh_mine_settings_card.dart';
 import 'package:gh_explorer/components/Mine/gh_mine_status_card.dart';
 import 'package:gh_explorer/components/common/gh_update_dialog.dart';
 import 'package:gh_explorer/components/common/hm_bottom_bar.dart';
@@ -10,6 +13,7 @@ import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
 import 'package:gh_explorer/services/app_update_service.dart';
+import 'package:gh_explorer/stores/explore_tags_controller.dart';
 import 'package:gh_explorer/stores/rate_limit_controller.dart';
 import 'package:gh_explorer/stores/star_sync_controller.dart';
 import 'package:gh_explorer/stores/token_manager.dart';
@@ -20,10 +24,13 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 /// 「我的」页面（参考 hm_shop MineView 结构）
 class MineView extends StatefulWidget {
-  const MineView({super.key, this.updateService});
+  const MineView({super.key, this.updateService, this.isActive = true});
 
   /// 可注入自定义更新服务（测试用，默认使用全局单例）
   final AppUpdateService? updateService;
+
+  /// 当前「我的」Tab 是否处于前景激活态，切入时自动同步最新 API 配额
+  final bool isActive;
 
   @override
   State<MineView> createState() => _MineViewState();
@@ -34,18 +41,43 @@ class _MineViewState extends State<MineView> {
   final RateLimitController _rateLimitController =
       Get.find<RateLimitController>();
   final StarSyncController _starSyncController = Get.find<StarSyncController>();
+  late final ExploreTagsController _tagsController =
+      Get.isRegistered<ExploreTagsController>()
+      ? Get.find<ExploreTagsController>()
+      : Get.put(ExploreTagsController(), permanent: true);
 
   AppUpdateService get _updateService =>
       widget.updateService ?? AppUpdateService.instance;
 
   String _versionText = '';
   bool _checkingUpdate = false;
+  late final Worker _userWatcher;
 
   @override
   void initState() {
     super.initState();
+    unawaited(_tagsController.ensureLoaded());
+    _userWatcher = ever(_userController.user, (_) {
+      if (mounted && widget.isActive) {
+        unawaited(_refreshRateLimit(silent: true));
+      }
+    });
     _loadVersion();
     _refreshRateLimit(silent: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant MineView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isActive && widget.isActive) {
+      unawaited(_refreshRateLimit(silent: true));
+    }
+  }
+
+  @override
+  void dispose() {
+    _userWatcher.dispose();
+    super.dispose();
   }
 
   /// 读取当前应用版本号（优先展示 CI 注入的 Release Tag）用于状态卡片展示
@@ -107,17 +139,24 @@ class _MineViewState extends State<MineView> {
     }
   }
 
-  /// 主动拉取当前 GitHub API 配额并同步到全局控制器
+  /// 主动拉取当前 GitHub API 核心与搜索配额并同步到全局控制器
   Future<void> _refreshRateLimit({bool silent = false}) async {
     try {
-      final state = await getRateLimitAPI();
+      final all = await getAllRateLimitsAPI();
       _rateLimitController.updateFromHeaders(
-        limit: state.limit,
-        remaining: state.remaining,
-        resetAt: state.resetAt,
+        limit: all.core.limit,
+        remaining: all.core.remaining,
+        resetAt: all.core.resetAt,
       );
+      if (all.search != null) {
+        _rateLimitController.updateSearchFromHeaders(
+          limit: all.search!.limit,
+          remaining: all.search!.remaining,
+          resetAt: all.search!.resetAt,
+        );
+      }
       if (!silent && mounted) {
-        ToastUtils.showToast(context, '配额已刷新：剩余 ${state.remaining} 次');
+        ToastUtils.showToast(context, '配额已刷新：剩余 ${all.core.remaining} 次');
       }
     } catch (e) {
       if (!silent && mounted) {
@@ -239,11 +278,20 @@ class _MineViewState extends State<MineView> {
                 Obx(
                   () => GhMineStatusCard(
                     rateLimit: _rateLimitController.state.value,
+                    searchRateLimit: _rateLimitController.searchState.value,
                     scopes: _userController.scopes.toList(),
                     versionText: _versionText,
                     onRefreshRateLimit: _refreshRateLimit,
                     onCheckUpdate: _checkUpdateManually,
                     checkingUpdate: _checkingUpdate,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.module),
+                Obx(
+                  () => GhMineSettingsCard(
+                    tagCount: _tagsController.displayTags.length,
+                    onTap: () =>
+                        Navigator.pushNamed(context, AppRoutes.settingsPath),
                   ),
                 ),
                 const SizedBox(height: 24),

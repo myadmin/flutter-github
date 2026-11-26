@@ -16,6 +16,7 @@ import 'package:gh_explorer/pages/RepoFileView/index.dart';
 import 'package:gh_explorer/pages/RepoFiles/index.dart';
 import 'package:gh_explorer/pages/RepoIssueDetail/index.dart';
 import 'package:gh_explorer/pages/RepoIssues/index.dart';
+import 'package:gh_explorer/pages/Settings/index.dart';
 import 'package:gh_explorer/pages/UserDetail/index.dart';
 import 'package:gh_explorer/pages/UserFollows/index.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
@@ -210,6 +211,7 @@ void main() {}
       (AppRoutes.myStarsPath, MyStarsPage),
       (AppRoutes.notificationsPath, NotificationsPage),
       (AppRoutes.footprintPath, FootprintPage),
+      (AppRoutes.settingsPath, SettingsPage),
     ];
 
     for (final (location, expectedType) in routeExpectations) {

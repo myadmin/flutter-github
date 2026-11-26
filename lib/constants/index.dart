@@ -29,6 +29,15 @@ class GlobalConstants {
   /// 本地存储键名：搜索历史关键词
   static const String searchHistoryKey = 'gh_explorer_search_history';
 
+  /// 本地存储键名：探索首页顶部展示的语言/主题标签列表
+  static const String exploreTagsKey = 'gh_explorer_explore_tags';
+
+  /// 本地存储键名：探索首页顶部是否固定展示「全部」标签
+  static const String exploreShowAllTagKey = 'gh_explorer_explore_show_all_tag';
+
+  /// 本地存储键名：用户自定义添加的探索顶部标签列表
+  static const String exploreCustomTagsKey = 'gh_explorer_explore_custom_tags';
+
   /// 本地存储键名：上次检查更新的时间戳
   static const String updateLastCheckKey = 'gh_explorer_update_last_check';
 

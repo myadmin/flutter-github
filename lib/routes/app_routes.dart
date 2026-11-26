@@ -19,6 +19,7 @@ class AppRoutes {
   static const String myStarsPath = '/my/stars';
   static const String notificationsPath = '/notifications';
   static const String footprintPath = '/footprint';
+  static const String settingsPath = '/settings';
 
   /// 仓库详情：`/repo?owner=<owner>&name=<repo>`
   static String repoDetail(String owner, String name) =>

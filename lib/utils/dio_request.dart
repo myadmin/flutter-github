@@ -20,6 +20,14 @@ typedef RateLimitCallback = void Function({
   DateTime? resetAt,
 });
 
+/// 按 GitHub 配额资源域（`core` / `search` 等）上报速率限制的回调签名
+typedef ResourceRateLimitCallback = void Function({
+  required String resource,
+  required int limit,
+  required int remaining,
+  DateTime? resetAt,
+});
+
 /// GitHub REST API v3 网络层封装（参考 hm_shop DioRequest 设计）
 class DioRequest {
   static final DioRequest _instance = DioRequest._internal();
@@ -37,8 +45,11 @@ class DioRequest {
   /// 401 登录态失效回调，由 MainPage 注册
   static VoidCallback? onUnauthorized;
 
-  /// 响应头速率限制信息回调，由应用入口接线到 RateLimitController
+  /// 响应头速率限制信息回调（仅 core 配额），由应用入口接线到 RateLimitController
   static RateLimitCallback? onRateLimitUpdate;
+
+  /// 按资源域分类的速率限制信息回调（区分 core / search），防止搜索限流覆盖核心配额
+  static ResourceRateLimitCallback? onResourceRateLimitUpdate;
 
   static const String _extraSkipAuthRedirect = 'skipAuthRedirect';
 
@@ -77,13 +88,13 @@ class DioRequest {
           return handler.next(request);
         },
         onResponse: (response, handler) {
-          _captureRateLimit(response.headers);
+          _captureRateLimit(response.headers, response.requestOptions.path);
           return handler.next(response);
         },
         onError: (error, handler) {
           final headers = error.response?.headers;
           if (headers != null) {
-            _captureRateLimit(headers);
+            _captureRateLimit(headers, error.requestOptions.path);
           }
           final translated = _translateError(error);
           debugPrint(
@@ -105,8 +116,8 @@ class DioRequest {
     );
   }
 
-  /// 从 GitHub 响应头中解析剩余请求配额与重置时间并通知状态层
-  void _captureRateLimit(Headers headers) {
+  /// 从 GitHub 响应头中解析剩余请求配额与重置时间并按资源域通知状态层
+  void _captureRateLimit(Headers headers, String requestPath) {
     final limitStr = headers.value('x-ratelimit-limit');
     final remainingStr = headers.value('x-ratelimit-remaining');
     if (limitStr == null || remainingStr == null) return;
@@ -117,11 +128,27 @@ class DioRequest {
     final resetAt = resetEpoch == null
         ? null
         : DateTime.fromMillisecondsSinceEpoch(resetEpoch * 1000);
-    onRateLimitUpdate?.call(
+    final headerResource = headers
+        .value('x-ratelimit-resource')
+        ?.trim()
+        .toLowerCase();
+    final resource = (headerResource != null && headerResource.isNotEmpty)
+        ? headerResource
+        : (requestPath.startsWith('/search/') ? 'search' : 'core');
+
+    onResourceRateLimitUpdate?.call(
+      resource: resource,
       limit: limit,
       remaining: remaining,
       resetAt: resetAt,
     );
+    if (resource == 'core') {
+      onRateLimitUpdate?.call(
+        limit: limit,
+        remaining: remaining,
+        resetAt: resetAt,
+      );
+    }
   }
 
   /// 将 Dio 底层错误码与异常类型翻译为面向用户的中文业务/网络异常

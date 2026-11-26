@@ -1,8 +1,10 @@
+import 'dart:async' show unawaited;
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:gh_explorer/routes/index.dart';
+import 'package:gh_explorer/stores/explore_tags_controller.dart';
 import 'package:gh_explorer/stores/rate_limit_controller.dart';
 import 'package:gh_explorer/stores/star_sync_controller.dart';
 import 'package:gh_explorer/stores/user_controller.dart';
@@ -32,11 +34,22 @@ void main(List<String> args) {
   Get.put(UserController(), permanent: true);
   Get.put(StarSyncController(), permanent: true);
   final rateLimitController = Get.put(RateLimitController(), permanent: true);
+  final exploreTagsController = Get.put(
+    ExploreTagsController(),
+    permanent: true,
+  );
+  unawaited(exploreTagsController.ensureLoaded());
 
-  // 将网络层捕获到的 GitHub RateLimit 响应头同步到全局配额控制器
-  DioRequest.onRateLimitUpdate =
-      ({required int limit, required int remaining, DateTime? resetAt}) {
-        rateLimitController.updateFromHeaders(
+  // 将网络层捕获到的 GitHub RateLimit 响应头按资源域同步到全局配额控制器
+  DioRequest.onResourceRateLimitUpdate =
+      ({
+        required String resource,
+        required int limit,
+        required int remaining,
+        DateTime? resetAt,
+      }) {
+        rateLimitController.updateFromResource(
+          resource: resource,
           limit: limit,
           remaining: remaining,
           resetAt: resetAt,

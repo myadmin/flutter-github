@@ -156,7 +156,7 @@ class _MainPageState extends State<MainPage> {
       case _feedTabIndex:
         return const FeedView();
       case _mineTabIndex:
-        return const MineView();
+        return MineView(isActive: _currentIndex == _mineTabIndex);
       case _exploreTabIndex:
       default:
         return ExploreView(

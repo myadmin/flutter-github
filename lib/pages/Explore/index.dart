@@ -1,4 +1,7 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:gh_explorer/api/search.dart';
 import 'package:gh_explorer/components/Explore/gh_explore_banner.dart';
 import 'package:gh_explorer/components/Explore/gh_featured_owners.dart';
@@ -17,6 +20,7 @@ import 'package:gh_explorer/models/repo.dart';
 import 'package:gh_explorer/pages/Explore/explore_config.dart';
 import 'package:gh_explorer/pages/Explore/skeleton.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
+import 'package:gh_explorer/stores/explore_tags_controller.dart';
 import 'package:gh_explorer/stores/footprint_store.dart';
 import 'package:gh_explorer/utils/paged_list.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
@@ -44,22 +48,16 @@ class ExploreView extends StatefulWidget {
 }
 
 class _ExploreViewState extends State<ExploreView> {
-  static const List<String> _languages = [
-    '全部',
-    'Dart',
-    'TypeScript',
-    'Python',
-    'Go',
-    'Rust',
-    'Swift',
-    'Java',
-    'Kotlin',
-    'Vue',
-  ];
-
   final ScrollController _scrollController = ScrollController();
 
-  String _selectedLanguage = '全部';
+  late final ExploreTagsController _tagsController =
+      Get.isRegistered<ExploreTagsController>()
+      ? Get.find<ExploreTagsController>()
+      : Get.put(ExploreTagsController(), permanent: true);
+
+  late final Worker _tagsWatcher;
+
+  late String _selectedLanguage;
   TrendingSince _selectedSince = TrendingSince.week;
   ExploreFeedMode _feedMode = ExploreFeedMode.trending;
 
@@ -93,16 +91,41 @@ class _ExploreViewState extends State<ExploreView> {
   @override
   void initState() {
     super.initState();
+    final initialTags = _tagsController.displayTags;
+    _selectedLanguage = initialTags.contains(ExploreTagsController.allTag)
+        ? ExploreTagsController.allTag
+        : (initialTags.isNotEmpty
+              ? initialTags.first
+              : ExploreTagsController.allTag);
     _scrollController.addListener(_onScroll);
+    _tagsWatcher = everAll([
+      _tagsController.selectedTags,
+      _tagsController.showAllTag,
+    ], (_) => _syncSelectedLanguageWithTags());
+    unawaited(_tagsController.ensureLoaded());
     _loadRecentFootprints();
     _loadInitialHomeData();
   }
 
   @override
   void dispose() {
+    _tagsWatcher.dispose();
     _scrollController.dispose();
     _list.dispose();
     super.dispose();
+  }
+
+  /// 当用户在设置页移除了当前正在浏览的顶部标签时，自动切回「全部」或首个可用标签并刷新
+  void _syncSelectedLanguageWithTags() {
+    if (!mounted) return;
+    final tags = _tagsController.displayTags;
+    if (tags.isEmpty || tags.contains(_selectedLanguage)) return;
+    final fallback = tags.contains(ExploreTagsController.allTag)
+        ? ExploreTagsController.allTag
+        : tags.first;
+    setState(() => _selectedLanguage = fallback);
+    _list.clear();
+    unawaited(_list.refresh());
   }
 
   /// 首屏优先拉取核心项目列表，成功后再补拉次级「热门作者」推荐栏（带 20 分钟缓存）
@@ -356,47 +379,50 @@ class _ExploreViewState extends State<ExploreView> {
             ),
           ),
           const SizedBox(height: 8),
-          // 语言横滑筛选胶囊（height 放宽到 38 并收敛内边距，防止小屏/Web 文字被上下裁切）
-          SizedBox(
-            height: 38,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _languages.length,
-              separatorBuilder: (context, index) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final lang = _languages[index];
-                final selected = lang == _selectedLanguage;
-                return Center(
-                  child: ChoiceChip(
-                    label: Text(lang),
-                    selected: selected,
-                    showCheckmark: false,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
+          // 语言/标签横滑筛选胶囊（从 ExploreTagsController 动态读取）
+          Obx(() {
+            final tags = _tagsController.displayTags;
+            return SizedBox(
+              height: 38,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: tags.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final lang = tags[index];
+                  final selected = lang == _selectedLanguage;
+                  return Center(
+                    child: ChoiceChip(
+                      label: Text(lang, softWrap: false),
+                      selected: selected,
+                      showCheckmark: false,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                      ),
+                      selectedColor: AppColors.brandDark,
+                      labelStyle: TextStyle(
+                        fontSize: 12,
+                        height: 1.2,
+                        color: selected ? Colors.white : AppColors.textPrimary,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                      backgroundColor: AppColors.inputFill,
+                      side: BorderSide.none,
+                      onSelected: (_) => _selectLanguage(lang),
                     ),
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
-                    selectedColor: AppColors.brandDark,
-                    labelStyle: TextStyle(
-                      fontSize: 12,
-                      height: 1.2,
-                      color: selected ? Colors.white : AppColors.textPrimary,
-                      fontWeight: selected
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                    ),
-                    backgroundColor: AppColors.inputFill,
-                    side: BorderSide.none,
-                    onSelected: (_) => _selectLanguage(lang),
-                  ),
-                );
-              },
-            ),
-          ),
+                  );
+                },
+              ),
+            );
+          }),
         ],
       ),
     );
