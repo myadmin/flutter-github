@@ -20,7 +20,13 @@ enum _SearchTarget { repos, users }
 
 /// 搜索页面（支持仓库 / 用户搜索、排序、语言过滤与本地历史）
 class SearchView extends StatefulWidget {
-  const SearchView({super.key});
+  const SearchView({super.key, this.presetQuery = '', this.queryTicket = 0});
+
+  /// 由探索首页快捷入口传入的预设查询串
+  final String presetQuery;
+
+  /// 查询递增序号，保证多次点击同一领域也能触发搜索刷新
+  final int queryTicket;
 
   @override
   State<SearchView> createState() => _SearchViewState();
@@ -86,6 +92,28 @@ class _SearchViewState extends State<SearchView> {
     super.initState();
     _scrollController.addListener(_onScroll);
     _loadHistory();
+    if (widget.queryTicket > 0 && widget.presetQuery.trim().isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _applyPresetQuery(widget.presetQuery);
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant SearchView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.queryTicket != oldWidget.queryTicket &&
+        widget.presetQuery.trim().isNotEmpty) {
+      _applyPresetQuery(widget.presetQuery);
+    }
+  }
+
+  /// 应用首页专题/领域传入的检索表达式并切回仓库搜索视图
+  void _applyPresetQuery(String query) {
+    if (_target != _SearchTarget.repos) {
+      setState(() => _target = _SearchTarget.repos);
+    }
+    _submitSearch(query);
   }
 
   @override

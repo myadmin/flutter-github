@@ -73,6 +73,20 @@ class AppColors {
   /// 代码块浅灰底
   static const Color codeBackground = Color(0xFFF6F8FA);
 
+  /// 首页轮播与专题卡片配色令牌
+  static const Color bannerSlateEnd = Color(0xFF32383F);
+  static const Color bannerBlueEnd = Color(0xFF0550AE);
+  static const Color bannerPurpleEnd = Color(0xFF6639BA);
+  static const Color bannerGreenEnd = Color(0xFF116329);
+
+  /// 首页领域入口强调色与浅底色
+  static const Color topicTeal = Color(0xFF0E7C7B);
+  static const Color topicTealSurface = Color(0xFFE0F7F6);
+  static const Color topicOrange = Color(0xFFBC4C00);
+  static const Color topicOrangeSurface = Color(0xFFFFF1E5);
+  static const Color topicPink = Color(0xFFBF3989);
+  static const Color topicPinkSurface = Color(0xFFFFEFF7);
+
   /// 常见编程语言对应的 GitHub 标准色值
   static const Map<String, Color> _languageColors = {
     'dart': Color(0xFF00B4AB),

@@ -118,6 +118,17 @@ class GhRepoCard extends StatelessWidget {
                       ),
                     ),
                   ],
+                  if (repo.topics.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final topic in repo.topics.take(3))
+                          _TopicTag(label: topic),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   Wrap(
                     spacing: 14,
@@ -139,6 +150,16 @@ class GhRepoCard extends StatelessWidget {
                         icon: Icons.call_split,
                         text: formatCompactNumber(repo.forksCount),
                       ),
+                      if (repo.openIssuesCount > 0)
+                        _StatItem(
+                          icon: Icons.adjust,
+                          text: formatCompactNumber(repo.openIssuesCount),
+                        ),
+                      if (repo.license != null && !repo.license!.isEmpty)
+                        _StatItem(
+                          icon: Icons.balance_outlined,
+                          text: repo.license!.displayName,
+                        ),
                       if (repo.updatedAt != null)
                         Text(
                           '更新于 ${formatRelativeTime(repo.updatedAt)}',
@@ -178,6 +199,31 @@ class _BadgePill extends StatelessWidget {
         border: Border.all(color: AppColors.divider),
       ),
       child: Text(label, style: AppTextStyles.label.copyWith(color: color)),
+    );
+  }
+}
+
+/// 仓库主题标签胶囊（如 flutter / llm / rust）
+class _TopicTag extends StatelessWidget {
+  const _TopicTag({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.primarySurface,
+        borderRadius: BorderRadius.circular(AppRadius.small),
+      ),
+      child: Text(
+        label,
+        style: AppTextStyles.label.copyWith(
+          color: AppColors.primary,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 }

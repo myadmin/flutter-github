@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:gh_explorer/pages/Explore/explore_config.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
 import 'package:gh_explorer/routes/index.dart';
 import 'package:gh_explorer/stores/rate_limit_controller.dart';
@@ -117,6 +118,7 @@ MockAdapter installAuthMock(
 })
 registerTestControllers() {
   Get.reset();
+  ExploreShowcaseCache.clear();
   final user = Get.put(UserController(), permanent: true);
   final starSync = Get.put(StarSyncController(), permanent: true);
   final rateLimit = Get.put(RateLimitController(), permanent: true);

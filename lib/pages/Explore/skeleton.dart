@@ -92,7 +92,25 @@ class _ExploreSkeletonState extends State<ExploreSkeleton>
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            for (var i = 0; i < 5; i++) ...[
+            _box(height: 104, radius: AppRadius.card),
+            const SizedBox(height: 10),
+            Container(
+              height: 82,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(AppRadius.card),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  for (var i = 0; i < 4; i++)
+                    _box(width: 44, height: 44, radius: 11),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            for (var i = 0; i < 4; i++) ...[
               _repoSkeletonCard(),
               const SizedBox(height: 10),
             ],

@@ -47,6 +47,8 @@ class _MainPageState extends State<MainPage> {
       widget.updateService ?? AppUpdateService.instance;
 
   int _currentIndex = _exploreTabIndex;
+  String _searchPresetQuery = '';
+  int _searchQueryTicket = 0;
 
   /// 只在首次切到某个 Tab 时才构建它，避免冷启动一次性发过多请求
   final Set<int> _visitedTabs = <int>{_exploreTabIndex};
@@ -130,6 +132,16 @@ class _MainPageState extends State<MainPage> {
     });
   }
 
+  /// 由探索页专题或领域快捷入口携带查询词跳转到搜索 Tab 并立即检索
+  void _openSearchWithQuery(String query) {
+    setState(() {
+      _searchPresetQuery = query;
+      _searchQueryTicket++;
+      _currentIndex = _searchTabIndex;
+      _visitedTabs.add(_searchTabIndex);
+    });
+  }
+
   /// 按下标懒加载构建 Tab 页面，未切到过的页面用空盒占位
   Widget _buildTabPage(int index) {
     if (!_visitedTabs.contains(index)) {
@@ -137,14 +149,21 @@ class _MainPageState extends State<MainPage> {
     }
     switch (index) {
       case _searchTabIndex:
-        return const SearchView();
+        return SearchView(
+          presetQuery: _searchPresetQuery,
+          queryTicket: _searchQueryTicket,
+        );
       case _feedTabIndex:
         return const FeedView();
       case _mineTabIndex:
         return const MineView();
       case _exploreTabIndex:
       default:
-        return ExploreView(onSearchTap: () => _selectTab(_searchTabIndex));
+        return ExploreView(
+          isActive: _currentIndex == _exploreTabIndex,
+          onSearchTap: () => _selectTab(_searchTabIndex),
+          onTopicQueryTap: _openSearchWithQuery,
+        );
     }
   }
 

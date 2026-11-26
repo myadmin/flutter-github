@@ -19,15 +19,40 @@ enum TrendingSince {
   final int days;
 }
 
-/// 根据语言与时间范围构造 GitHub Search API 查询串
+/// 探索列表细分维度（热门榜单 / 新手友好 / 近期活跃）
+enum ExploreFeedMode {
+  trending('热门榜单', 'stars'),
+  beginner('新手友好', 'stars'),
+  recentlyActive('近期活跃', 'updated');
+
+  const ExploreFeedMode(this.label, this.sortField);
+
+  final String label;
+  final String sortField;
+}
+
+/// 根据语言、时间范围与榜单模式构造 GitHub Search API 查询串
 String buildExploreQuery({
   String language = '全部',
   TrendingSince since = TrendingSince.week,
+  ExploreFeedMode feedMode = ExploreFeedMode.trending,
   DateTime? now,
 }) {
   final parts = <String>[];
-  if (since.days > 0) {
-    final base = (now ?? DateTime.now()).subtract(Duration(days: since.days));
+  final referenceNow = now ?? DateTime.now();
+
+  if (feedMode == ExploreFeedMode.beginner) {
+    parts.add('good-first-issues:>3');
+    parts.add('stars:>50');
+  } else if (feedMode == ExploreFeedMode.recentlyActive) {
+    final recent = referenceNow.subtract(const Duration(days: 3));
+    final y = recent.year.toString().padLeft(4, '0');
+    final m = recent.month.toString().padLeft(2, '0');
+    final d = recent.day.toString().padLeft(2, '0');
+    parts.add('pushed:>$y-$m-$d');
+    parts.add('stars:>200');
+  } else if (since.days > 0) {
+    final base = referenceNow.subtract(Duration(days: since.days));
     final y = base.year.toString().padLeft(4, '0');
     final m = base.month.toString().padLeft(2, '0');
     final d = base.day.toString().padLeft(2, '0');
@@ -36,6 +61,7 @@ String buildExploreQuery({
   } else {
     parts.add('stars:>1000');
   }
+
   final lang = language.trim();
   if (lang.isNotEmpty && lang != '全部') {
     parts.add('language:$lang');
