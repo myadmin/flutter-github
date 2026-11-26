@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 仅授权缓存目录内 updates 子目录供系统安装器读取 APK -->
+    <cache-path name="apk_updates" path="updates/" />
+</paths>

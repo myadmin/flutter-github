@@ -88,13 +88,50 @@ jobs:
             echo "::notice::签名模式：debug（可直接装机试用；配置 ANDROID_KEYSTORE_BASE64 后切换为正式签名）"
           fi
 
+      - name: Resolve build version
+        # 构建阶段即确定与 Release 一致的 Tag 及单调递增的 build-number，供应用内更新对比使用
+        env:
+          INPUT_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          APP_VERSION=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -1 | tr -d '\r')
+          APP_VERSION_NAME="${APP_VERSION%%+*}"
+          PUBSPEC_BUILD="${APP_VERSION##*+}"
+          if ! [[ "$PUBSPEC_BUILD" =~ ^[0-9]+$ ]]; then
+            PUBSPEC_BUILD=1
+          fi
+          BUILD_NUMBER="$PUBSPEC_BUILD"
+          if [ "${GITHUB_RUN_NUMBER:-0}" -gt "$BUILD_NUMBER" ]; then
+            BUILD_NUMBER="$GITHUB_RUN_NUMBER"
+          fi
+          TAG="${INPUT_TAG:-}"
+          if [ -z "$TAG" ]; then
+            if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+              TAG="${GITHUB_REF#refs/tags/}"
+            else
+              TAG="v${APP_VERSION_NAME}-build.${GITHUB_RUN_NUMBER}"
+            fi
+          fi
+          echo "APP_VERSION_NAME=$APP_VERSION_NAME" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "::notice::构建版本号：${APP_VERSION_NAME}+${BUILD_NUMBER}，Release Tag：${TAG}"
+
       - name: Build release APKs (split per ABI)
-        # 分别打出 arm64-v8a / armeabi-v7a / x86_64 APK，单包体积更小
-        run: flutter build apk --release --split-per-abi
+        # 分别打出 arm64-v8a / armeabi-v7a / x86_64 APK，并注入当前 Release Tag 供应用内自动更新比对
+        run: |
+          flutter build apk --release --split-per-abi \
+            --build-name="${APP_VERSION_NAME}" \
+            --build-number="${BUILD_NUMBER}" \
+            --dart-define="GH_RELEASE_TAG=${RELEASE_TAG}"
 
       - name: Build release App Bundle
         # Google Play 等商店分发使用的 AAB 格式
-        run: flutter build appbundle --release
+        run: |
+          flutter build appbundle --release \
+            --build-name="${APP_VERSION_NAME}" \
+            --build-number="${BUILD_NUMBER}" \
+            --dart-define="GH_RELEASE_TAG=${RELEASE_TAG}"
 
       - name: Verify APK signature
         # 输出实际签名证书指纹，防止正式签名配置漏生效

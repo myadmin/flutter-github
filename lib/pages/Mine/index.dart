@@ -4,9 +4,12 @@ import 'package:gh_explorer/api/user.dart';
 import 'package:gh_explorer/components/Mine/gh_mine_header.dart';
 import 'package:gh_explorer/components/Mine/gh_mine_quick_actions.dart';
 import 'package:gh_explorer/components/Mine/gh_mine_status_card.dart';
+import 'package:gh_explorer/components/common/gh_update_dialog.dart';
 import 'package:gh_explorer/components/common/hm_bottom_bar.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
+import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
+import 'package:gh_explorer/services/app_update_service.dart';
 import 'package:gh_explorer/stores/rate_limit_controller.dart';
 import 'package:gh_explorer/stores/star_sync_controller.dart';
 import 'package:gh_explorer/stores/token_manager.dart';
@@ -17,7 +20,10 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 /// 「我的」页面（参考 hm_shop MineView 结构）
 class MineView extends StatefulWidget {
-  const MineView({super.key});
+  const MineView({super.key, this.updateService});
+
+  /// 可注入自定义更新服务（测试用，默认使用全局单例）
+  final AppUpdateService? updateService;
 
   @override
   State<MineView> createState() => _MineViewState();
@@ -29,7 +35,11 @@ class _MineViewState extends State<MineView> {
       Get.find<RateLimitController>();
   final StarSyncController _starSyncController = Get.find<StarSyncController>();
 
+  AppUpdateService get _updateService =>
+      widget.updateService ?? AppUpdateService.instance;
+
   String _versionText = '';
+  bool _checkingUpdate = false;
 
   @override
   void initState() {
@@ -38,8 +48,15 @@ class _MineViewState extends State<MineView> {
     _refreshRateLimit(silent: true);
   }
 
-  /// 读取当前应用版本号用于状态卡片展示
+  /// 读取当前应用版本号（优先展示 CI 注入的 Release Tag）用于状态卡片展示
   Future<void> _loadVersion() async {
+    if (GlobalConstants.appReleaseTag.isNotEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _versionText = GlobalConstants.appReleaseTag;
+      });
+      return;
+    }
     try {
       final info = await PackageInfo.fromPlatform();
       if (!mounted) return;
@@ -48,6 +65,45 @@ class _MineViewState extends State<MineView> {
       });
     } catch (_) {
       // 测试环境未注册平台插件时忽略
+    }
+  }
+
+  /// 手动点击检查更新：绕过 6 小时冷却期即时检测最新 GitHub Release
+  Future<void> _checkUpdateManually() async {
+    if (_checkingUpdate) return;
+    setState(() {
+      _checkingUpdate = true;
+    });
+    try {
+      final release = await _updateService.check(force: true);
+      if (!mounted) return;
+      final current = await _updateService.currentVersion();
+      if (!mounted) return;
+      if (release == null) {
+        final label = current.isEmpty
+            ? 'v1.0.0'
+            : (current.startsWith('v') ? current : 'v$current');
+        ToastUtils.showToast(context, '当前已是最新版本 $label');
+        return;
+      }
+      await showGhUpdateDialog(
+        context,
+        release: release,
+        currentVersion: current,
+        service: _updateService,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ToastUtils.showToast(
+        context,
+        resolveErrorMessage(e, fallback: '检查更新失败，请稍后重试'),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _checkingUpdate = false;
+        });
+      }
     }
   }
 
@@ -186,6 +242,8 @@ class _MineViewState extends State<MineView> {
                     scopes: _userController.scopes.toList(),
                     versionText: _versionText,
                     onRefreshRateLimit: _refreshRateLimit,
+                    onCheckUpdate: _checkUpdateManually,
+                    checkingUpdate: _checkingUpdate,
                   ),
                 ),
                 const SizedBox(height: 24),

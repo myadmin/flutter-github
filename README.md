@@ -12,7 +12,7 @@
   - **探索**：按编程语言（Dart / TypeScript / Python / Go / Rust / Swift 等）与时间窗口（今日 / 本周 / 本月 / 历史）浏览热门开源项目，带呼吸骨架屏、下拉刷新与上拉分页；
   - **搜索**：支持仓库与用户双类型搜索、排序切换（最佳匹配 / Star 最多 / Fork 最多 / 最近更新）、本地搜索历史与热搜词；
   - **动态**：展示已关注开发者的事件流（Star / Fork / Push / Release / Issue / PR）与消息通知入口（支持仅未读筛选与标为已读）；
-  - **我的**：展示个人资料统计（公开仓库 / Followers / Following）、快捷入口（我的仓库 / 我的 Star / 消息通知 / 本地浏览足迹）、实时 GitHub API 配额与 Token 权限范围。
+  - **我的**：展示个人资料统计（公开仓库 / Followers / Following）、快捷入口（我的仓库 / 我的 Star / 消息通知 / 本地浏览足迹）、实时 GitHub API 配额、Token 权限范围以及应用内自动检查更新（Android 端支持应用内下载带进度条的 APK 并自动调起系统安装界面）。
 - **项目查看与 Star 互动**：
   - **仓库详情**：概览信息、Topic 标签、开源协议、代码浏览 / Issues / Commits 导航、Markdown README 渲染（自动修正相对图片路径，SVG 徽章优雅降级）；
   - **点 Star / 取消 Star**：未登录拦截跳转登录页，已登录支持**乐观更新 + 失败回滚**，并通过 `StarSyncController` 在探索页、搜索页、我的 Star 与详情页之间实时联动；

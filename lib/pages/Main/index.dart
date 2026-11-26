@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:gh_explorer/api/user.dart';
+import 'package:gh_explorer/components/common/gh_update_dialog.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/pages/Explore/index.dart';
 import 'package:gh_explorer/pages/Feed/index.dart';
 import 'package:gh_explorer/pages/Mine/index.dart';
 import 'package:gh_explorer/pages/Search/index.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
+import 'package:gh_explorer/services/app_update_service.dart';
 import 'package:gh_explorer/stores/star_sync_controller.dart';
 import 'package:gh_explorer/stores/token_manager.dart';
 import 'package:gh_explorer/stores/user_controller.dart';
@@ -23,7 +25,10 @@ final List<({IconData icon, IconData activeIcon, String label})> _tabList = [
 
 /// 主框架：底部 4 Tab 懒加载容器（参考 hm_shop MainPage）
 class MainPage extends StatefulWidget {
-  const MainPage({super.key});
+  const MainPage({super.key, this.updateService});
+
+  /// 可注入自定义更新服务（测试用，默认使用全局单例）
+  final AppUpdateService? updateService;
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -37,6 +42,9 @@ class _MainPageState extends State<MainPage> {
 
   final UserController _userController = Get.find<UserController>();
   final StarSyncController _starSyncController = Get.find<StarSyncController>();
+
+  AppUpdateService get _updateService =>
+      widget.updateService ?? AppUpdateService.instance;
 
   int _currentIndex = _exploreTabIndex;
 
@@ -58,7 +66,21 @@ class _MainPageState extends State<MainPage> {
         _starSyncController.clearAll();
       }
     });
-    _initUser();
+    _initUser().whenComplete(_checkAppUpdate);
+  }
+
+  /// 冷启动静默检测 GitHub Release 更新，仅发现更新时弹窗提示
+  Future<void> _checkAppUpdate() async {
+    final release = await _updateService.check();
+    if (release == null || !mounted) return;
+    final current = await _updateService.currentVersion();
+    if (!mounted) return;
+    await showGhUpdateDialog(
+      context,
+      release: release,
+      currentVersion: current,
+      service: _updateService,
+    );
   }
 
   @override

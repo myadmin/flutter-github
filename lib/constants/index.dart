@@ -29,14 +29,30 @@ class GlobalConstants {
   /// 本地存储键名：搜索历史关键词
   static const String searchHistoryKey = 'gh_explorer_search_history';
 
+  /// 本地存储键名：上次检查更新的时间戳
+  static const String updateLastCheckKey = 'gh_explorer_update_last_check';
+
+  /// 本地存储键名：用户选择跳过的最新 Release 标签
+  static const String updateSkipTagKey = 'gh_explorer_update_skip_tag';
+
+  /// 静默自动检查更新的最小间隔（小时），避免频繁消耗未登录 IP 配额
+  static const int updateCheckHours = 6;
+
+  /// CI 构建注入的完整发布标签（例如 `v1.0.0-build.4`），本地调试时为空
+  static const String appReleaseTag = String.fromEnvironment('GH_RELEASE_TAG');
+
   /// 可通过 `--dart-define=GH_OAUTH_CLIENT_ID=xxx` 注入 GitHub OAuth App Client ID
   static const String oauthClientId = String.fromEnvironment(
     'GH_OAUTH_CLIENT_ID',
   );
 
-  /// 仓库版本检测地址（预留检查更新功能）
-  static const String repoOwner = 'flutter';
-  static const String repoName = 'flutter';
+  /// 仓库版本检测地址（对应本应用托管的 GitHub 仓库）
+  static const String repoOwner = 'myadmin';
+  static const String repoName = 'flutter-github';
+
+  /// Releases 页面地址（非 Android 平台或浏览器兜底下载使用）
+  static const String releasesPageUrl =
+      '$webBaseUrl/$repoOwner/$repoName/releases/latest';
 }
 
 /// GitHub REST API v3 与 OAuth 端点常量
@@ -58,6 +74,8 @@ class HttpConstants {
 
   // 仓库资源
   static const String repos = '/repos';
+  static const String latestRelease =
+      '/repos/${GlobalConstants.repoOwner}/${GlobalConstants.repoName}/releases/latest';
 
   // OAuth Device Flow（仅原生端可用，Web 端受限于 github.com CORS）
   static const String deviceCodeUrl = 'https://github.com/login/device/code';

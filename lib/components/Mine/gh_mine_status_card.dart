@@ -3,7 +3,7 @@ import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/stores/rate_limit_controller.dart';
 
-/// API 速率配额、Token 权限与版本信息卡片
+/// API 速率配额、Token 权限、版本信息与检查更新卡片
 class GhMineStatusCard extends StatelessWidget {
   const GhMineStatusCard({
     super.key,
@@ -11,12 +11,27 @@ class GhMineStatusCard extends StatelessWidget {
     required this.scopes,
     required this.versionText,
     required this.onRefreshRateLimit,
+    this.onCheckUpdate,
+    this.checkingUpdate = false,
   });
 
   final RateLimitState rateLimit;
   final List<String> scopes;
   final String versionText;
   final VoidCallback onRefreshRateLimit;
+
+  /// 手动点击检查新版本回调（为空时不展示操作入口）
+  final VoidCallback? onCheckUpdate;
+
+  /// 是否正在请求远端 Release 检查更新
+  final bool checkingUpdate;
+
+  /// 统一规范版本号显示格式（避免出现 `vv1.0.0`）
+  String _formatVersionLabel(String raw) {
+    final v = raw.trim();
+    if (v.isEmpty) return 'v1.0.0';
+    return v.startsWith('v') || v.startsWith('V') ? v : 'v$v';
+  }
 
   /// 将配额重置时间格式化为本地 `HH:mm` 字符串
   String _formatResetTime(DateTime? dt) {
@@ -122,11 +137,52 @@ class GhMineStatusCard extends StatelessWidget {
             children: [
               const Text('应用版本', style: AppTextStyles.bodySmall),
               Text(
-                versionText.isEmpty ? 'v1.0.0' : 'v$versionText',
+                _formatVersionLabel(versionText),
                 style: AppTextStyles.caption,
               ),
             ],
           ),
+          if (onCheckUpdate != null) ...[
+            const Divider(height: 18, color: AppColors.divider),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: checkingUpdate ? null : onCheckUpdate,
+                borderRadius: BorderRadius.circular(AppRadius.small),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('检查更新', style: AppTextStyles.bodySmall),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (checkingUpdate) ...[
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            const SizedBox(width: 6),
+                            const Text('检查中...', style: AppTextStyles.caption),
+                          ] else ...[
+                            const Text('立即检测', style: AppTextStyles.caption),
+                            const SizedBox(width: 2),
+                            const Icon(
+                              Icons.chevron_right,
+                              size: 16,
+                              color: AppColors.textSecondary,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -73,8 +73,14 @@ jobs:
           set -euo pipefail
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
           BASE_HREF="${INPUT_BASE_HREF:-/${REPO_NAME}/}"
-          echo "::notice::构建 Web base-href=${BASE_HREF}"
-          flutter build web --release --base-href "${BASE_HREF}" --no-wasm-dry-run
+          APP_VERSION=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -1 | tr -d '\r')
+          APP_VERSION_NAME="${APP_VERSION%%+*}"
+          RELEASE_TAG="v${APP_VERSION_NAME}-build.${GITHUB_RUN_NUMBER}"
+          echo "::notice::构建 Web base-href=${BASE_HREF} tag=${RELEASE_TAG}"
+          flutter build web --release \
+            --base-href "${BASE_HREF}" \
+            --dart-define="GH_RELEASE_TAG=${RELEASE_TAG}" \
+            --no-wasm-dry-run
 
       - name: Strip engine symbol files
         # 清理调试用 *.symbols 文件减小静态托管体积，不影响生产运行
