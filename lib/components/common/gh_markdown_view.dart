@@ -1,0 +1,123 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:gh_explorer/constants/app_text_styles.dart';
+import 'package:gh_explorer/constants/app_theme.dart';
+import 'package:gh_explorer/utils/formatters.dart';
+import 'package:gh_explorer/utils/toast_utils.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+/// GitHub 风格 Markdown 渲染组件（README / Issue 正文与评论共用）
+class GhMarkdownView extends StatelessWidget {
+  const GhMarkdownView({
+    super.key,
+    required this.data,
+    this.owner = '',
+    this.repo = '',
+    this.branch = 'main',
+  });
+
+  final String data;
+  final String owner;
+  final String repo;
+  final String branch;
+
+  /// 点击 Markdown 超链接时校验协议并唤起外部浏览器打开
+  Future<void> _handleLinkTap(
+    BuildContext context,
+    String text,
+    String? href,
+    String title,
+  ) async {
+    if (href == null || href.trim().isEmpty) return;
+    final uri = Uri.tryParse(href.trim());
+    if (uri == null ||
+        (uri.scheme != 'http' &&
+            uri.scheme != 'https' &&
+            uri.scheme != 'mailto')) {
+      return;
+    }
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ToastUtils.showToast(context, '无法打开链接');
+    }
+  }
+
+  /// 自定义图片构建器：补全仓库相对路径，并为不支持的 SVG 徽章提供文本胶囊降级
+  Widget _buildImage(Uri uri, String? title, String? alt) {
+    final raw = uri.toString();
+    final resolved = (owner.isNotEmpty && repo.isNotEmpty)
+        ? resolveRepoAssetUrl(raw, owner: owner, repo: repo, branch: branch)
+        : raw;
+
+    final lower = resolved.toLowerCase();
+    // Image.network 不支持 SVG（如 shields.io 徽章），降级为紧凑文本胶囊
+    if (lower.endsWith('.svg') ||
+        lower.contains('.svg?') ||
+        lower.contains('img.shields.io') ||
+        lower.contains('shields.io/badge')) {
+      final badgeLabel = (alt != null && alt.trim().isNotEmpty)
+          ? alt.trim()
+          : 'Badge';
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: AppColors.inputFill,
+          borderRadius: BorderRadius.circular(AppRadius.small),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Text(badgeLabel, style: AppTextStyles.captionSmall),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Image.network(
+        resolved,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.imagePlaceholder,
+              borderRadius: BorderRadius.circular(AppRadius.small),
+            ),
+            child: Text(
+              alt != null && alt.isNotEmpty ? '[图片: $alt]' : '[图片加载失败]',
+              style: AppTextStyles.caption,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return MarkdownBody(
+      data: data,
+      selectable: true,
+      onTapLink: (text, href, title) =>
+          _handleLinkTap(context, text, href, title),
+      imageBuilder: _buildImage,
+      styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+        p: AppTextStyles.body.copyWith(height: 1.55),
+        h1: AppTextStyles.pageTitle.copyWith(fontSize: 20, height: 1.4),
+        h2: AppTextStyles.sectionTitle.copyWith(fontSize: 18, height: 1.4),
+        h3: AppTextStyles.sectionTitle.copyWith(fontSize: 16, height: 1.4),
+        a: const TextStyle(color: AppColors.link),
+        code: AppTextStyles.mono.copyWith(
+          backgroundColor: AppColors.codeBackground,
+          fontSize: 12.5,
+        ),
+        codeblockDecoration: BoxDecoration(
+          color: AppColors.codeBackground,
+          borderRadius: BorderRadius.circular(AppRadius.small),
+          border: Border.all(color: AppColors.divider),
+        ),
+        blockquoteDecoration: const BoxDecoration(
+          border: Border(left: BorderSide(color: AppColors.divider, width: 3)),
+        ),
+      ),
+    );
+  }
+}

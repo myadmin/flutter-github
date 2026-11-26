@@ -1,0 +1,357 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:gh_explorer/constants/index.dart';
+import 'package:gh_explorer/stores/token_manager.dart';
+import 'package:gh_explorer/utils/api_exception.dart';
+import 'package:gh_explorer/utils/formatters.dart';
+
+/// GitHub API 分页响应载体
+class PagedResponse {
+  const PagedResponse({required this.data, required this.hasNextPage});
+
+  final dynamic data;
+  final bool hasNextPage;
+}
+
+/// GitHub 速率限制更新回调签名
+typedef RateLimitCallback = void Function({
+  required int limit,
+  required int remaining,
+  DateTime? resetAt,
+});
+
+/// GitHub REST API v3 网络层封装（参考 hm_shop DioRequest 设计）
+class DioRequest {
+  static final DioRequest _instance = DioRequest._internal();
+  factory DioRequest() => _instance;
+
+  final Dio _dio = Dio();
+  final Dio _authDio = Dio();
+
+  /// 暴露底层 Dio 实例，方便测试替换 httpClientAdapter
+  Dio get dio => _dio;
+
+  /// 用于 github.com/login/* 设备授权接口的独立 Dio，测试时同样可 mock
+  Dio get authDio => _authDio;
+
+  /// 401 登录态失效回调，由 MainPage 注册
+  static VoidCallback? onUnauthorized;
+
+  /// 响应头速率限制信息回调，由应用入口接线到 RateLimitController
+  static RateLimitCallback? onRateLimitUpdate;
+
+  static const String _extraSkipAuthRedirect = 'skipAuthRedirect';
+
+  DioRequest._internal() {
+    _dio.options
+      ..baseUrl = GlobalConstants.apiBaseUrl
+      ..connectTimeout = const Duration(seconds: GlobalConstants.timeout)
+      ..sendTimeout = const Duration(seconds: GlobalConstants.timeout)
+      ..receiveTimeout = const Duration(seconds: GlobalConstants.timeout)
+      ..headers = {
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': GlobalConstants.apiVersion,
+      };
+
+    _authDio.options
+      ..connectTimeout = const Duration(seconds: GlobalConstants.timeout)
+      ..sendTimeout = const Duration(seconds: GlobalConstants.timeout)
+      ..receiveTimeout = const Duration(seconds: GlobalConstants.timeout)
+      ..headers = {'Accept': 'application/json'};
+
+    _addInterceptor();
+  }
+
+  /// 注册请求与响应拦截器：注入凭证、采集限流配额、统一翻译网络与业务异常
+  void _addInterceptor() {
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (request, handler) {
+          // 允许调用方显式指定临时 Authorization（例如登录前验证 PAT）
+          if (!request.headers.containsKey('Authorization')) {
+            final token = tokenManager.getToken();
+            if (token.isNotEmpty) {
+              request.headers['Authorization'] = 'Bearer $token';
+            }
+          }
+          return handler.next(request);
+        },
+        onResponse: (response, handler) {
+          _captureRateLimit(response.headers);
+          return handler.next(response);
+        },
+        onError: (error, handler) {
+          final headers = error.response?.headers;
+          if (headers != null) {
+            _captureRateLimit(headers);
+          }
+          final translated = _translateError(error);
+          debugPrint(
+            '[DioRequest] ${error.requestOptions.method} '
+            '${error.requestOptions.uri} 失败: $translated',
+          );
+          return handler.reject(
+            DioException(
+              requestOptions: error.requestOptions,
+              response: error.response,
+              type: error.type,
+              error: translated,
+              message: _messageOf(translated) ?? error.message,
+              stackTrace: error.stackTrace,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// 从 GitHub 响应头中解析剩余请求配额与重置时间并通知状态层
+  void _captureRateLimit(Headers headers) {
+    final limitStr = headers.value('x-ratelimit-limit');
+    final remainingStr = headers.value('x-ratelimit-remaining');
+    if (limitStr == null || remainingStr == null) return;
+    final limit = int.tryParse(limitStr);
+    final remaining = int.tryParse(remainingStr);
+    if (limit == null || remaining == null) return;
+    final resetEpoch = int.tryParse(headers.value('x-ratelimit-reset') ?? '');
+    final resetAt = resetEpoch == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(resetEpoch * 1000);
+    onRateLimitUpdate?.call(
+      limit: limit,
+      remaining: remaining,
+      resetAt: resetAt,
+    );
+  }
+
+  /// 将 Dio 底层错误码与异常类型翻译为面向用户的中文业务/网络异常
+  Exception _translateError(DioException error) {
+    if (error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.sendTimeout ||
+        error.type == DioExceptionType.receiveTimeout) {
+      return NetworkException('网络请求超时，请稍后重试');
+    }
+
+    final response = error.response;
+    final statusCode = response?.statusCode;
+    final skipRedirect =
+        error.requestOptions.extra[_extraSkipAuthRedirect] == true;
+
+    if (statusCode == 401) {
+      if (!skipRedirect) {
+        tokenManager.removeToken();
+        onUnauthorized?.call();
+        return NetworkException('GitHub 凭证已失效，请重新登录');
+      }
+      return ApiException('GitHub Token 无效或已过期', code: '401');
+    }
+
+    if (statusCode == 403 || statusCode == 429) {
+      final remaining = response?.headers.value('x-ratelimit-remaining');
+      if (remaining == '0') {
+        final resetEpoch = int.tryParse(
+          response?.headers.value('x-ratelimit-reset') ?? '',
+        );
+        final resetAt = resetEpoch == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(resetEpoch * 1000);
+        final resetHint = resetAt == null
+            ? '请稍后再试'
+            : '将于 ${_formatClock(resetAt)} 重置';
+        return RateLimitException(
+          'GitHub API 请求次数已达上限，$resetHint（登录后配额更高）',
+          resetAt: resetAt,
+        );
+      }
+    }
+
+    final data = response?.data;
+    if (data is Map && data['message'] != null) {
+      final rawMsg = data['message'].toString();
+      if (statusCode == 404) {
+        return ApiException('请求的仓库或用户不存在', code: '404');
+      }
+      if (statusCode == 403) {
+        return ApiException('权限不足：$rawMsg', code: '403');
+      }
+      return ApiException(rawMsg, code: statusCode?.toString());
+    }
+
+    if (error.type == DioExceptionType.badResponse) {
+      return NetworkException(
+        'GitHub 服务异常${statusCode == null ? '' : '（$statusCode）'}',
+      );
+    }
+
+    return NetworkException('网络连接异常，请检查网络或代理设置');
+  }
+
+  static String _formatClock(DateTime dt) {
+    final local = dt.toLocal();
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
+  }
+
+  static String? _messageOf(Exception error) {
+    if (error is ApiException) return error.message;
+    if (error is NetworkException) return error.message;
+    return null;
+  }
+
+  /// 通用 GET 请求
+  Future<dynamic> get(
+    String url, {
+    Map<String, dynamic>? params,
+    Map<String, dynamic>? headers,
+    bool skipAuthRedirect = false,
+  }) async {
+    final res = await _execute(
+      () => _dio.get<dynamic>(
+        url,
+        queryParameters: params,
+        options: Options(
+          headers: headers,
+          extra: {_extraSkipAuthRedirect: skipAuthRedirect},
+        ),
+      ),
+    );
+    return res.data;
+  }
+
+  /// 带响应与响应头信息的 GET 请求（用于读取 `X-OAuth-Scopes` 等头字段）
+  Future<Response<dynamic>> getFullResponse(
+    String url, {
+    Map<String, dynamic>? params,
+    Map<String, dynamic>? headers,
+    bool skipAuthRedirect = false,
+  }) {
+    return _execute(
+      () => _dio.get<dynamic>(
+        url,
+        queryParameters: params,
+        options: Options(
+          headers: headers,
+          extra: {_extraSkipAuthRedirect: skipAuthRedirect},
+        ),
+      ),
+    );
+  }
+
+  /// 面向列表分页的 GET 请求：自动解析 GitHub `Link` 头判定是否有下一页
+  Future<PagedResponse> getPaged(
+    String url, {
+    Map<String, dynamic>? params,
+    int perPage = GlobalConstants.defaultPageSize,
+  }) async {
+    final res = await _execute(
+      () => _dio.get<dynamic>(url, queryParameters: params),
+    );
+    final linkHeader = res.headers.value('link');
+    final hasLinkNext = parseHasNextPage(linkHeader);
+    final data = res.data;
+    final hasNext = linkHeader != null
+        ? hasLinkNext
+        : (data is List && data.length >= perPage);
+    return PagedResponse(data: data, hasNextPage: hasNext);
+  }
+
+  /// 拉取原始文本内容（README / 源码文件）
+  Future<String> getRaw(String url, {Map<String, dynamic>? params}) async {
+    final res = await _execute(
+      () => _dio.get<String>(
+        url,
+        queryParameters: params,
+        options: Options(
+          responseType: ResponseType.plain,
+          headers: const {'Accept': 'application/vnd.github.raw+json'},
+        ),
+      ),
+    );
+    return res.data ?? '';
+  }
+
+  /// 用于检查状态接口（如 `GET /user/starred/{owner}/{repo}`：`204` 为 true，`404` 为 false）
+  Future<bool> checkExists(String url) async {
+    final res = await _execute(
+      () => _dio.get<dynamic>(
+        url,
+        options: Options(
+          validateStatus: (status) =>
+              status != null &&
+              ((status >= 200 && status < 300) || status == 404),
+        ),
+      ),
+    );
+    final code = res.statusCode ?? 404;
+    return code >= 200 && code < 300;
+  }
+
+  /// 通用 POST 请求
+  Future<dynamic> post(
+    String url, {
+    Object? data,
+    Map<String, dynamic>? headers,
+  }) async {
+    final res = await _execute(
+      () => _dio.post<dynamic>(
+        url,
+        data: data,
+        options: headers == null ? null : Options(headers: headers),
+      ),
+    );
+    return res.data;
+  }
+
+  /// 通用 PUT 请求（点 Star 等无请求体操作传 null）
+  Future<dynamic> put(
+    String url, {
+    Object? data,
+    Map<String, dynamic>? headers,
+  }) async {
+    final res = await _execute(
+      () => _dio.put<dynamic>(
+        url,
+        data: data,
+        options: headers == null ? null : Options(headers: headers),
+      ),
+    );
+    return res.data;
+  }
+
+  /// 通用 PATCH 请求（如标为已读等）
+  Future<dynamic> patch(
+    String url, {
+    Object? data,
+    Map<String, dynamic>? headers,
+  }) async {
+    final res = await _execute(
+      () => _dio.patch<dynamic>(
+        url,
+        data: data,
+        options: headers == null ? null : Options(headers: headers),
+      ),
+    );
+    return res.data;
+  }
+
+  /// 通用 DELETE 请求（取消 Star / Unfollow 等）
+  Future<dynamic> delete(String url, {Object? data}) async {
+    final res = await _execute(() => _dio.delete<dynamic>(url, data: data));
+    return res.data;
+  }
+
+  /// 统一执行 Dio 请求并解包拦截器翻译后的异常对象
+  Future<Response<T>> _execute<T>(Future<Response<T>> Function() task) async {
+    try {
+      return await task();
+    } on DioException catch (e) {
+      final cause = e.error;
+      if (cause is Exception) throw cause;
+      throw NetworkException(e.message ?? '网络连接异常，请检查网络');
+    }
+  }
+}
+
+/// 全局网络请求单例
+final dioRequest = DioRequest();

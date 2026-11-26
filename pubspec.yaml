@@ -1,0 +1,40 @@
+name: gh_explorer
+description: "基于 Flutter 的 GitHub 探索与项目管理客户端，参考 hm_shop 分层架构：支持 PAT / Device Flow 登录、底部 4 Tab 懒加载、热门探索、仓库与用户搜索、README 与源码浏览、Issue 查看与评论、Star / Follow 互动及本地足迹。"
+publish_to: 'none'
+
+# 版本号格式：<versionName>+<versionCode>
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # GetX 内部组件及跨平台图标兜底依赖
+  cupertino_icons: ^1.0.8
+  # 仅用于 Web 端 URL 路径策略（由 lib/utils/web_url_strategy.dart 做条件导出）
+  flutter_web_plugins:
+    sdk: flutter
+  # 网络请求库（封装 GitHub REST v3 请求与响应头拦截）
+  dio: ^5.11.1
+  # 轻量级响应式全局状态（仅用于 User / StarSync / RateLimit）
+  get: ^4.7.3
+  # 本地键值持久化（Token、权限列表、搜索历史、浏览足迹）
+  shared_preferences: ^2.5.6
+  # 读取当前应用版本号用于个人中心展示
+  package_info_plus: ^10.2.2
+  # 唤起系统浏览器打开 GitHub 仓库、授权页与外部链接
+  url_launcher: ^6.3.3
+  # 渲染仓库 README 与 Issue / 评论的 Markdown 内容
+  flutter_markdown_plus: ^1.0.12
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

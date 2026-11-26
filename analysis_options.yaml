@@ -1,0 +1,36 @@
+# 静态分析与代码规范配置（对齐 hm_shop 的严格类型检查）
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  # 排除构建输出与各平台原生壳目录
+  exclude:
+    - build/**
+    - web/**
+    - android/**
+    - ios/**
+    - windows/**
+    - macos/**
+    - linux/**
+  language:
+    # 禁止隐式向下转型，接口数据一律显式转换
+    strict-casts: true
+    # 禁止无法推断类型的模糊表达式
+    strict-inference: true
+    # 禁止裸泛型（List / Map 必须声明类型参数）
+    strict-raw-types: true
+
+linter:
+  rules:
+    # 禁止忽略异步 Future 返回值，防止写盘或状态更新未等待
+    - unawaited_futures
+    # 优先使用 const 构造与常量声明以减少 Widget 重建开销
+    - prefer_const_constructors
+    - prefer_const_declarations
+    # 不可变局部变量优先使用 final
+    - prefer_final_locals
+    # 禁止直接对 dynamic 调用成员，避免运行时 NoSuchMethodError
+    - avoid_dynamic_calls
+    # 确保 StreamSubscription 等订阅资源正确取消
+    - cancel_subscriptions
+    # 构造函数透传 key 时使用 super.key 简写
+    - use_super_parameters

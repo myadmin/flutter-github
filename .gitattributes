@@ -1,0 +1,34 @@
+# 统一换行符：仓库内文本文件一律使用 LF，避免 Windows 检出转换造成无意义 diff
+* text=auto eol=lf
+
+# Windows 批处理与 PowerShell 脚本保持 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Shell 与 Gradle 脚本保持 LF（供 Linux / macOS 执行）
+*.sh text eol=lf
+gradlew text eol=lf
+
+# 二进制资源不做换行转换与文本合并
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.jar binary
+*.jks binary
+*.keystore binary
+*.zip binary
+*.aab binary
+*.apk binary
+*.ipa binary
+
+# 文档标记为 documentation，不计入语言统计
+*.md linguist-documentation
+docs/** linguist-documentation
