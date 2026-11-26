@@ -119,6 +119,121 @@ class AppColors {
   }
 }
 
+/// 代码编辑器明/暗双主题语义配色令牌（基于 GitHub Dark / Light 语法规范）
+class EditorPalette {
+  const EditorPalette({
+    required this.isDark,
+    required this.background,
+    required this.surface,
+    required this.border,
+    required this.activeLineBackground,
+    required this.gutterBackground,
+    required this.gutterText,
+    required this.gutterActiveText,
+    required this.toolbarText,
+    required this.toolbarMuted,
+    required this.chipBackground,
+    required this.chipActiveBackground,
+    required this.chipActiveText,
+    required this.scrollbarThumb,
+    required this.plain,
+    required this.keyword,
+    required this.stringLiteral,
+    required this.comment,
+    required this.number,
+    required this.typeName,
+    required this.functionCall,
+    required this.annotation,
+    required this.punctuation,
+    required this.matchBackground,
+    required this.activeMatchBackground,
+  });
+
+  final bool isDark;
+  final Color background;
+  final Color surface;
+  final Color border;
+  final Color activeLineBackground;
+  final Color gutterBackground;
+  final Color gutterText;
+  final Color gutterActiveText;
+  final Color toolbarText;
+  final Color toolbarMuted;
+  final Color chipBackground;
+  final Color chipActiveBackground;
+  final Color chipActiveText;
+  final Color scrollbarThumb;
+  final Color plain;
+  final Color keyword;
+  final Color stringLiteral;
+  final Color comment;
+  final Color number;
+  final Color typeName;
+  final Color functionCall;
+  final Color annotation;
+  final Color punctuation;
+  final Color matchBackground;
+  final Color activeMatchBackground;
+
+  /// GitHub Dark 默认深色编辑器主题
+  static const EditorPalette dark = EditorPalette(
+    isDark: true,
+    background: Color(0xFF0D1117),
+    surface: Color(0xFF161B22),
+    border: Color(0xFF30363D),
+    activeLineBackground: Color(0xFF1C2330),
+    gutterBackground: Color(0xFF0D1117),
+    gutterText: Color(0xFF6E7681),
+    gutterActiveText: Color(0xFFE6EDF3),
+    toolbarText: Color(0xFFE6EDF3),
+    toolbarMuted: Color(0xFF8B949E),
+    chipBackground: Color(0xFF21262D),
+    chipActiveBackground: Color(0xFF1F6FEB),
+    chipActiveText: Color(0xFFFFFFFF),
+    scrollbarThumb: Color(0xFF484F58),
+    plain: Color(0xFFE6EDF3),
+    keyword: Color(0xFFFF7B72),
+    stringLiteral: Color(0xFFA5D6FF),
+    comment: Color(0xFF8B949E),
+    number: Color(0xFF79C0FF),
+    typeName: Color(0xFFFFA657),
+    functionCall: Color(0xFFD2A8FF),
+    annotation: Color(0xFFFFA657),
+    punctuation: Color(0xFF9EA7B3),
+    matchBackground: Color(0xFF634800),
+    activeMatchBackground: Color(0xFFBB8009),
+  );
+
+  /// GitHub Light 默认浅色编辑器主题
+  static const EditorPalette light = EditorPalette(
+    isDark: false,
+    background: Color(0xFFFFFFFF),
+    surface: Color(0xFFF6F8FA),
+    border: Color(0xFFD0D7DE),
+    activeLineBackground: Color(0xFFF0F6FC),
+    gutterBackground: Color(0xFFFAFBFC),
+    gutterText: Color(0xFF8C959F),
+    gutterActiveText: Color(0xFF1F2328),
+    toolbarText: Color(0xFF1F2328),
+    toolbarMuted: Color(0xFF57606A),
+    chipBackground: Color(0xFFEAEFF4),
+    chipActiveBackground: Color(0xFF0969DA),
+    chipActiveText: Color(0xFFFFFFFF),
+    scrollbarThumb: Color(0xFF8C959F),
+    plain: Color(0xFF1F2328),
+    keyword: Color(0xFFCF222E),
+    stringLiteral: Color(0xFF0A3069),
+    comment: Color(0xFF6E7781),
+    number: Color(0xFF0550AE),
+    typeName: Color(0xFF953800),
+    functionCall: Color(0xFF8250DF),
+    annotation: Color(0xFF953800),
+    punctuation: Color(0xFF57606A),
+    matchBackground: Color(0xFFFFF8C5),
+    activeMatchBackground: Color(0xFFFFD33D),
+  );
+}
+
 /// 统一圆角
 class AppRadius {
   const AppRadius._();

@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gh_explorer/api/repo.dart';
+import 'package:gh_explorer/components/Repo/gh_code_editor_view.dart';
 import 'package:gh_explorer/components/common/app_error_view.dart';
 import 'package:gh_explorer/components/common/app_network_image.dart';
 import 'package:gh_explorer/components/common/gh_markdown_view.dart';
 import 'package:gh_explorer/components/common/hm_bottom_bar.dart';
-import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/utils/api_exception.dart';
 import 'package:gh_explorer/utils/formatters.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
 
-/// 仓库单文件查看页（支持文本源码带行号展示、Markdown 渲染及图片预览）
+/// 仓库单文件查看页（支持编辑器级源码阅读、Markdown 预览/源码切换及图片缩放）
 class RepoFileViewPage extends StatefulWidget {
   const RepoFileViewPage({
     super.key,
@@ -34,6 +34,7 @@ class _RepoFileViewPageState extends State<RepoFileViewPage> {
   String _content = '';
   bool _isLoading = true;
   String _errorMessage = '';
+  bool _showMarkdownSource = false;
 
   /// 根据扩展名判断是否为图片资源（直接走 Raw 地址渲染）
   bool get _isImageFile {
@@ -120,6 +121,16 @@ class _RepoFileViewPageState extends State<RepoFileViewPage> {
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
         actions: [
+          if (_isMarkdownFile && _content.isNotEmpty)
+            IconButton(
+              onPressed: () =>
+                  setState(() => _showMarkdownSource = !_showMarkdownSource),
+              icon: Icon(
+                _showMarkdownSource ? Icons.article_outlined : Icons.code,
+                size: 19,
+              ),
+              tooltip: _showMarkdownSource ? '切换预览' : '查看源码',
+            ),
           if (!_isImageFile && _content.isNotEmpty)
             IconButton(
               onPressed: _copyCode,
@@ -152,7 +163,7 @@ class _RepoFileViewPageState extends State<RepoFileViewPage> {
         ),
       );
     }
-    if (_isMarkdownFile) {
+    if (_isMarkdownFile && !_showMarkdownSource) {
       return Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(
@@ -178,31 +189,6 @@ class _RepoFileViewPageState extends State<RepoFileViewPage> {
       );
     }
 
-    final lines = _content.split('\n');
-    return Container(
-      color: Colors.white,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SelectableText.rich(
-            TextSpan(
-              children: [
-                for (var i = 0; i < lines.length; i++) ...[
-                  TextSpan(
-                    text: '${(i + 1).toString().padLeft(4)}  ',
-                    style: AppTextStyles.monoSmall,
-                  ),
-                  TextSpan(
-                    text: '${lines[i]}${i < lines.length - 1 ? '\n' : ''}',
-                    style: AppTextStyles.mono,
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    return GhCodeEditorView(content: _content, filePath: widget.path);
   }
 }
