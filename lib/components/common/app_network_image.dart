@@ -33,9 +33,10 @@ class AppNetworkImage extends StatelessWidget {
     if (trimmed.isEmpty) {
       child = _buildPlaceholder(context, showIcon: true);
     } else {
-      final cacheWidth = decodeWidth == null
+      final double? logicalWidth = decodeWidth ?? width;
+      final cacheWidth = logicalWidth == null
           ? null
-          : (decodeWidth! * MediaQuery.devicePixelRatioOf(context)).round();
+          : (logicalWidth * MediaQuery.devicePixelRatioOf(context)).round();
       child = Image.network(
         trimmed,
         width: width,

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
 import 'package:gh_explorer/routes/index.dart';
 import 'package:gh_explorer/services/apk_downloader_io.dart';
+import 'package:gh_explorer/services/apk_verifier.dart';
 import 'package:gh_explorer/utils/app_error_reporter.dart';
 import 'package:gh_explorer/utils/external_link.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -141,6 +142,71 @@ void main() {
 
       expect(find.text('没有找到这个页面'), findsOneWidget);
       expect(find.textContaining('number'), findsOneWidget);
+    });
+  });
+
+  group('verifyDownloadedApk 安装包校验', () {
+    test('体积与摘要都匹配时通过', () {
+      expect(
+        () => verifyDownloadedApk(
+          actualSize: 1024,
+          actualSha256: 'ABCDEF',
+          expectedSize: 1024,
+          expectedSha256: 'abcdef',
+        ),
+        returnsNormally,
+      );
+    });
+
+    test('空文件被拦截', () {
+      expect(
+        () => verifyDownloadedApk(actualSize: 0),
+        throwsA(
+          isA<FileSystemException>().having(
+            (e) => e.message,
+            'message',
+            contains('安装包为空'),
+          ),
+        ),
+      );
+    });
+
+    test('体积与 Release 记录不一致被拦截', () {
+      expect(
+        () => verifyDownloadedApk(actualSize: 900, expectedSize: 1024),
+        throwsA(
+          isA<FileSystemException>().having(
+            (e) => e.message,
+            'message',
+            contains('安装包大小与 Release 记录不一致'),
+          ),
+        ),
+      );
+    });
+
+    test('SHA-256 摘要不匹配被拦截', () {
+      expect(
+        () => verifyDownloadedApk(
+          actualSize: 1024,
+          actualSha256: 'deadbeef',
+          expectedSize: 1024,
+          expectedSha256: 'abcdef',
+        ),
+        throwsA(
+          isA<FileSystemException>().having(
+            (e) => e.message,
+            'message',
+            contains('SHA-256 摘要不匹配'),
+          ),
+        ),
+      );
+    });
+
+    test('声明了摘要但本地未计算时同样视为不匹配', () {
+      expect(
+        () => verifyDownloadedApk(actualSize: 1024, expectedSha256: 'abcdef'),
+        throwsA(isA<FileSystemException>()),
+      );
     });
   });
 }

@@ -111,6 +111,7 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
       }
     }
     _maxLineUnits = maxUnits;
+    _invalidateLineSpans();
   }
 
   void _syncGutterScroll() {
@@ -152,6 +153,7 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
   }
 
   void _toggleTheme() {
+    _invalidateLineSpans();
     setState(() => _isDark = !_isDark);
   }
 
@@ -162,6 +164,7 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
   void _adjustFontSize(double delta) {
     final next = (_fontSize + delta).clamp(_minFontSize, _maxFontSize);
     if (next == _fontSize) return;
+    _invalidateLineSpans();
     setState(() => _fontSize = next);
   }
 
@@ -176,6 +179,7 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
         _activeMatchIndex = 0;
       }
     });
+    _invalidateLineSpans();
   }
 
   void _rebuildSearchMatches(String query, {bool jumpToFirst = true}) {
@@ -197,6 +201,7 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
         _activeLineIndex = matches.first.lineIndex;
       }
     });
+    _invalidateLineSpans();
 
     if (jumpToFirst && matches.isNotEmpty) {
       _scrollToLine(matches.first.lineIndex);
@@ -212,6 +217,7 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
       _activeMatchIndex = normalizedIndex;
       _activeLineIndex = targetLine;
     });
+    _invalidateLineSpans();
     _scrollToLine(targetLine);
   }
 
@@ -596,14 +602,28 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
     );
   }
 
+  /// 行样式缓存：主题/字号/搜索态变化时整体失效，避免滚动或点行时重复分词
+  static const int _spanCacheLimit = 400;
+  final Map<int, TextSpan> _spanCache = <int, TextSpan>{};
+
+  void _invalidateLineSpans() {
+    _spanCache.clear();
+  }
+
   TextSpan _buildLineSpan(
     int lineIndex,
     EditorPalette palette,
     TextStyle baseStyle,
   ) {
+    final cached = _spanCache.remove(lineIndex);
+    if (cached != null) {
+      // 命中后重新插入到队尾，保持“最近使用在最后”的顺序
+      _spanCache[lineIndex] = cached;
+      return cached;
+    }
     final lineMatches = _matchesByLine[lineIndex] ?? const <CodeSearchMatch>[];
     final firstMatchIdx = _lineFirstMatchIndex[lineIndex] ?? 0;
-    return CodeSyntaxHighlighter.buildLineSpan(
+    final span = CodeSyntaxHighlighter.buildLineSpan(
       line: _lines[lineIndex],
       language: _language,
       palette: palette,
@@ -613,6 +633,11 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
       lineMatchStartIndex: firstMatchIdx,
       activeMatchGlobalIndex: _matches.isEmpty ? null : _activeMatchIndex,
     );
+    _spanCache[lineIndex] = span;
+    if (_spanCache.length > _spanCacheLimit) {
+      _spanCache.remove(_spanCache.keys.first);
+    }
+    return span;
   }
 
   TextStyle _codeTextStyle() {

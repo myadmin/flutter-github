@@ -120,9 +120,12 @@ void main() {
     failSecondPage = true;
     await ctrl.loadMore();
     expect(ctrl.items, [1, 2]);
+    expect(ctrl.loadMoreFailed, isTrue);
 
     failSecondPage = false;
-    await ctrl.loadMore();
+    ctrl.retryLoadMore();
+    await pumpEventQueue();
+    expect(ctrl.loadMoreFailed, isFalse);
     expect(ctrl.items, [1, 2, 3]);
     expect(ctrl.hasMore, isFalse);
 
@@ -207,6 +210,42 @@ void main() {
     expect(ctrl2.items, [3, 4]);
     ctrl.dispose();
     ctrl2.dispose();
+  });
+
+  test('PagedListController 加载更多失败后暂停自动重试，可手动重试', () async {
+    var failNext = true;
+    var loadMoreCalls = 0;
+    final ctrl = PagedListController<int>(
+      pageSize: 2,
+      loader: (page) async {
+        if (page == 1) {
+          return const PageResult<int>(items: [1, 2], page: 1, hasMore: true);
+        }
+        loadMoreCalls++;
+        if (failNext) {
+          throw NetworkException('断网了');
+        }
+        return const PageResult<int>(items: [3, 4], page: 2, hasMore: false);
+      },
+    );
+
+    await ctrl.refresh();
+    expect(ctrl.items, [1, 2]);
+
+    await ctrl.loadMore();
+    expect(ctrl.loadMoreFailed, isTrue);
+    expect(ctrl.items, [1, 2], reason: '失败不得清空已有数据');
+
+    // 失败态下继续滚动不应该反复打接口
+    await ctrl.loadMore();
+    expect(loadMoreCalls, 1);
+
+    failNext = false;
+    ctrl.retryLoadMore();
+    await pumpEventQueue();
+    expect(ctrl.loadMoreFailed, isFalse);
+    expect(ctrl.items, [1, 2, 3, 4]);
+    ctrl.dispose();
   });
 
   test('TokenManager 将历史明文令牌迁移到安全存储并清除明文', () async {

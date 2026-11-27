@@ -402,6 +402,8 @@ class _UserDetailPageState extends State<UserDetailPage> {
       HmListFooter(
         loadingMore: list.loadingMore,
         hasMore: list.hasMore,
+        failed: list.loadMoreFailed,
+        onRetry: list.retryLoadMore,
         noMoreText: '已展示全部项目',
       ),
     ];

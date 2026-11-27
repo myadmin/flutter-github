@@ -14,7 +14,10 @@ import 'package:gh_explorer/utils/dio_request.dart';
 import 'package:gh_explorer/utils/web_url_strategy.dart';
 
 /// 应用入口：初始化跨平台配置、全局异常兜底与共享状态控制器
-void main(List<String> args) {
+///
+/// 启动阶段会等待「主题模式」从本地读取完成后再 `runApp`，避免暗色用户
+/// 首帧先闪一下浅色主题（SharedPreferences 读取为毫秒级，不影响启动耗时）。
+Future<void> main(List<String> args) async {
   // 插件（如 SharedPreferences）依赖 Flutter Binding，必须在 runApp 前初始化
   WidgetsFlutterBinding.ensureInitialized();
   // Web 端启用真实路径策略（/repo?...），非 Web 平台为空实现
@@ -46,7 +49,8 @@ void main(List<String> args) {
   );
   unawaited(exploreTagsController.ensureLoaded());
   final themeController = Get.put(ThemeController(), permanent: true);
-  unawaited(themeController.ensureLoaded());
+  // 首帧前就把主题模式读出来，避免暗色用户看到浅色闪屏
+  await themeController.ensureLoaded();
 
   // 将网络层捕获到的 GitHub RateLimit 响应头按资源域同步到全局配额控制器
   DioRequest.onResourceRateLimitUpdate =

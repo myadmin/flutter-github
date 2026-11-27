@@ -151,6 +151,8 @@ class _MyStarsPageState extends State<MyStarsPage> {
             return HmListFooter(
               loadingMore: _list.loadingMore,
               hasMore: _list.hasMore,
+              failed: _list.loadMoreFailed,
+              onRetry: _list.retryLoadMore,
               noMoreText: '没有更多 Star 项目了',
             );
           }

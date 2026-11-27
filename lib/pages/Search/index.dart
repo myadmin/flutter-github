@@ -157,11 +157,12 @@ class _SearchViewState extends State<SearchView> {
     }
     FocusScope.of(context).unfocus();
     setState(() => _activeQuery = text);
+    // 先刷新首屏结果，本地历史落盘不阻塞网络请求（写盘失败不影响搜索）
+    _refreshCurrentTarget();
     final updated = await SearchHistoryStore.record(text);
     if (mounted) {
       setState(() => _history = updated);
     }
-    _refreshCurrentTarget();
   }
 
   /// 根据当前选中的仓库/用户模式重新拉取首屏结果
@@ -431,6 +432,8 @@ class _SearchViewState extends State<SearchView> {
                   return HmListFooter(
                     loadingMore: _repoList.loadingMore,
                     hasMore: _repoList.hasMore,
+                    failed: _repoList.loadMoreFailed,
+                    onRetry: _repoList.retryLoadMore,
                     noMoreText: '没有更多搜索结果了',
                   );
                 }
@@ -481,6 +484,8 @@ class _SearchViewState extends State<SearchView> {
                 return HmListFooter(
                   loadingMore: _userList.loadingMore,
                   hasMore: _userList.hasMore,
+                  failed: _userList.loadMoreFailed,
+                  onRetry: _userList.retryLoadMore,
                   noMoreText: '没有更多用户了',
                 );
               }

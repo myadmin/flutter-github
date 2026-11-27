@@ -309,6 +309,8 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
             return HmListFooter(
               loadingMore: _list.loadingMore,
               hasMore: _list.hasMore,
+              failed: _list.loadMoreFailed,
+              onRetry: _list.retryLoadMore,
               noMoreText: '没有更多记录了',
             );
           }

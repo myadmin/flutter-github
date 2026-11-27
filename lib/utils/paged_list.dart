@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
@@ -43,6 +44,7 @@ class PagedListController<T> extends ChangeNotifier {
   bool _loadingMore = false;
   bool _refreshing = false;
   bool _hasMore = true;
+  bool _loadMoreFailed = false;
   String _errorMessage = '';
   bool _disposed = false;
 
@@ -62,6 +64,9 @@ class PagedListController<T> extends ChangeNotifier {
 
   bool get hasMore => _hasMore;
 
+  /// 上一次「加载更多」是否失败（失败后需用户点击重试，避免滚动反复请求）
+  bool get loadMoreFailed => _loadMoreFailed;
+
   String get errorMessage => _errorMessage;
 
   bool get isEmpty => _items.isEmpty;
@@ -73,6 +78,7 @@ class PagedListController<T> extends ChangeNotifier {
     _refreshing = true;
     _isLoading = _items.isEmpty;
     _loadingMore = false;
+    _loadMoreFailed = false;
     _errorMessage = '';
     _hasMore = true;
     notifyListeners();
@@ -85,6 +91,7 @@ class PagedListController<T> extends ChangeNotifier {
         _isLoading ||
         _refreshing ||
         _loadingMore ||
+        _loadMoreFailed ||
         !_hasMore ||
         _items.isEmpty) {
       return;
@@ -93,6 +100,14 @@ class PagedListController<T> extends ChangeNotifier {
     _loadingMore = true;
     notifyListeners();
     await _fetch(page: _page + 1, reset: false, epoch: epoch);
+  }
+
+  /// 用户点击「加载失败，重试」时重新拉取下一页
+  void retryLoadMore() {
+    if (_disposed || !_loadMoreFailed || _loadingMore) return;
+    _loadMoreFailed = false;
+    notifyListeners();
+    unawaited(loadMore());
   }
 
   /// 本地移除若干项（如取消 Star 后同步我的 Star 列表）
@@ -112,6 +127,7 @@ class PagedListController<T> extends ChangeNotifier {
     _page = 1;
     _isLoading = false;
     _loadingMore = false;
+    _loadMoreFailed = false;
     _hasMore = true;
     _errorMessage = '';
     notifyListeners();
@@ -134,6 +150,7 @@ class PagedListController<T> extends ChangeNotifier {
       }
       _page = result.page > 0 ? result.page : page;
       _hasMore = result.hasMore && result.items.isNotEmpty;
+      _loadMoreFailed = false;
     } catch (error) {
       if (_disposed || epoch != _epoch) return;
       final String message = resolveErrorMessage(
@@ -143,6 +160,8 @@ class PagedListController<T> extends ChangeNotifier {
       if (reset) {
         _errorMessage = message;
       } else {
+        // 记录失败态，滚动不再自动重试，等用户点击 footer 上的重试按钮
+        _loadMoreFailed = true;
         onLoadMoreError?.call(message);
       }
     } finally {

@@ -10,6 +10,26 @@ import 'package:gh_explorer/utils/paged_list.dart';
 String _issuesBase(String owner, String repo) =>
     '${HttpConstants.repos}/${Uri.encodeComponent(owner.trim())}/${Uri.encodeComponent(repo.trim())}/issues';
 
+/// 匹配形如 `repo:xxx`、`is:pr`、`author:someone` 的 GitHub Search 限定符
+final RegExp _searchQualifier = RegExp(r'(^|[\s(])[A-Za-z][A-Za-z0-9_-]*:');
+
+/// 净化仓库标识：去掉空白与冒号，避免污染 `repo:` 限定符
+String _cleanRepoPart(String value) =>
+    value.trim().replaceAll(RegExp(r'[\s:]+'), '');
+
+/// 转义用户关键词：出现限定符写法时整体加引号，避免越权改写搜索范围
+///
+/// GitHub Search 把 `repo:`、`is:`、`author:` 等视为过滤器，直接拼接用户输入会被
+/// 用来把搜索范围切换到其它仓库或放宽状态过滤，因此这里把含限定符的输入降级为
+/// 字面量短语（引号内冒号不再具备过滤语义）。
+String _escapeRepoIssueKeyword(String keyword) {
+  if (keyword.isEmpty || !_searchQualifier.hasMatch(keyword)) {
+    return keyword;
+  }
+  final escaped = keyword.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
+  return '"$escaped"';
+}
+
 /// 构造在当前仓库范围内搜索全部 Issues / PR 的 GitHub Search 查询串
 String buildRepoIssueSearchQuery({
   required String owner,
@@ -22,8 +42,11 @@ String buildRepoIssueSearchQuery({
   if (RegExp(r'^#\d+$').hasMatch(cleanKeyword)) {
     cleanKeyword = cleanKeyword.substring(1);
   }
+  cleanKeyword = _escapeRepoIssueKeyword(cleanKeyword);
 
-  final parts = <String>['repo:${owner.trim()}/${repo.trim()}'];
+  final parts = <String>[
+    'repo:${_cleanRepoPart(owner)}/${_cleanRepoPart(repo)}',
+  ];
   final lower = cleanKeyword.toLowerCase();
   final hasExplicitState =
       lower.contains('is:open') || lower.contains('is:closed');

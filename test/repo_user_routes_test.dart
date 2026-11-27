@@ -203,6 +203,33 @@ void main() {
       ),
       'repo:flutter/flutter is:closed thread',
     );
+    // 关键词里出现 `repo:` 等限定符时降级为字面量短语，不能把搜索范围改到别的仓库
+    expect(
+      buildRepoIssueSearchQuery(
+        owner: 'flutter',
+        repo: 'flutter',
+        keyword: 'repo:evil/other',
+      ),
+      'repo:flutter/flutter is:open "repo:evil/other"',
+    );
+    // 形如 `is:pr` 的输入同样被引号包裹，避免放宽状态过滤
+    expect(
+      buildRepoIssueSearchQuery(
+        owner: 'flutter',
+        repo: 'flutter',
+        keyword: 'is:pr thread',
+      ),
+      'repo:flutter/flutter is:open "is:pr thread"',
+    );
+    // 仓库标识里的空白会被清理，避免拼出非法限定符
+    expect(
+      buildRepoIssueSearchQuery(
+        owner: ' flutter ',
+        repo: ' flutter ',
+        keyword: 'crash',
+      ),
+      'repo:flutter/flutter is:open crash',
+    );
 
     final mock = installMock((options) {
       if (options.path == '/search/issues') {

@@ -159,7 +159,11 @@ class _RepoFileViewPageState extends State<RepoFileViewPage> {
       );
       return Center(
         child: InteractiveViewer(
-          child: AppNetworkImage(url: imageUrl, fit: BoxFit.contain),
+          child: AppNetworkImage(
+            url: imageUrl,
+            fit: BoxFit.contain,
+            decodeWidth: MediaQuery.sizeOf(context).width,
+          ),
         ),
       );
     }

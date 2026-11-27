@@ -133,6 +133,8 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
             return HmListFooter(
               loadingMore: _list.loadingMore,
               hasMore: _list.hasMore,
+              failed: _list.loadMoreFailed,
+              onRetry: _list.retryLoadMore,
               noMoreText: '已展示全部提交',
             );
           }

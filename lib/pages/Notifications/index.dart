@@ -200,6 +200,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
             return HmListFooter(
               loadingMore: _list.loadingMore,
               hasMore: _list.hasMore,
+              failed: _list.loadMoreFailed,
+              onRetry: _list.retryLoadMore,
               noMoreText: '没有更多通知了',
             );
           }

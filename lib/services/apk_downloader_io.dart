@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:gh_explorer/services/apk_verifier.dart';
 
 /// 使用独立纯净 Dio 下载 APK 到目标目录，避免将 GitHub API Token 转发到 CDN 跳转地址。
 ///
@@ -57,18 +58,16 @@ Future<String> downloadApkToFile({
     }
 
     final downloadedSize = await partFile.length();
-    if (expectedSize > 0 && downloadedSize != expectedSize) {
-      throw FileSystemException(
-        '安装包大小与 Release 记录不一致（$downloadedSize / $expectedSize 字节）',
-      );
-    }
-
+    var actualDigest = '';
     if (expectedSha256.isNotEmpty) {
-      final digest = sha256.convert(await partFile.readAsBytes()).toString();
-      if (digest.toLowerCase() != expectedSha256.toLowerCase()) {
-        throw const FileSystemException('安装包校验失败：SHA-256 摘要不匹配');
-      }
+      actualDigest = sha256.convert(await partFile.readAsBytes()).toString();
     }
+    verifyDownloadedApk(
+      actualSize: downloadedSize,
+      actualSha256: actualDigest,
+      expectedSize: expectedSize,
+      expectedSha256: expectedSha256,
+    );
 
     if (await targetFile.exists()) {
       await targetFile.delete();

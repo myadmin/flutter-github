@@ -166,6 +166,8 @@ class _FeedViewState extends State<FeedView> {
             return HmListFooter(
               loadingMore: _list.loadingMore,
               hasMore: _list.hasMore,
+              failed: _list.loadMoreFailed,
+              onRetry: _list.retryLoadMore,
               noMoreText: '没有更多动态了',
             );
           }

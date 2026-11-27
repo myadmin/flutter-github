@@ -624,6 +624,8 @@ class _ExploreViewState extends State<ExploreView> {
                     return HmListFooter(
                       loadingMore: _list.loadingMore,
                       hasMore: _list.hasMore,
+                      failed: _list.loadMoreFailed,
+                      onRetry: _list.retryLoadMore,
                       noMoreText: '已显示全部热门项目',
                     );
                   }

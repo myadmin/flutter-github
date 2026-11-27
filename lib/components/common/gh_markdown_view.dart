@@ -68,24 +68,48 @@ class GhMarkdownView extends StatelessWidget {
       );
     }
 
+    // README 内图片通常为整幅截图，按容器宽度解码即可，避免原图分辨率占满内存
+    final double logicalWidth = MediaQuery.sizeOf(context).width
+        .clamp(160.0, 1200.0);
+    final int cacheWidth =
+        (logicalWidth * MediaQuery.devicePixelRatioOf(context)).round();
+    final String? label = (alt != null && alt.trim().isNotEmpty)
+        ? alt.trim()
+        : null;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Image.network(
         resolved,
+        cacheWidth: cacheWidth,
+        semanticLabel: label,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return _buildImageFallback(context, alt, loading: true);
+        },
         errorBuilder: (context, error, stackTrace) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: context.appColors.imagePlaceholder,
-              borderRadius: BorderRadius.circular(AppRadius.small),
-            ),
-            child: Text(
-              alt != null && alt.isNotEmpty ? '[图片: $alt]' : '[图片加载失败]',
-              style: context.captionStyle,
-            ),
-          );
+          return _buildImageFallback(context, alt, loading: false);
         },
       ),
+    );
+  }
+
+  /// 图片加载中 / 加载失败的占位，保持与正文一致的圆角与配色
+  Widget _buildImageFallback(
+    BuildContext context,
+    String? alt, {
+    required bool loading,
+  }) {
+    final text = loading
+        ? (alt != null && alt.isNotEmpty ? '[图片加载中: $alt]' : '[图片加载中]')
+        : (alt != null && alt.isNotEmpty ? '[图片: $alt]' : '[图片加载失败]');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: context.appColors.imagePlaceholder,
+        borderRadius: BorderRadius.circular(AppRadius.small),
+      ),
+      child: Text(text, style: context.captionStyle),
     );
   }
 

@@ -171,6 +171,8 @@ class _MyReposPageState extends State<MyReposPage> {
             return HmListFooter(
               loadingMore: _list.loadingMore,
               hasMore: _list.hasMore,
+              failed: _list.loadMoreFailed,
+              onRetry: _list.retryLoadMore,
               noMoreText: '已展示全部仓库',
             );
           }
