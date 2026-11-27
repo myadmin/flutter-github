@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/models/footprint.dart';
 import 'package:gh_explorer/models/repo.dart';
 import 'package:gh_explorer/models/user.dart';
@@ -307,5 +308,64 @@ void main() {
     expect(controllers.user.isLoggedIn, isFalse);
     expect(tokenManager.hasToken, isFalse);
     expect(find.text('点击登录 GitHub'), findsOneWidget);
+  });
+
+  testWidgets('底部导航选中项在明暗双主题下均展示高对比高亮色、活跃胶囊与区分图标', (tester) async {
+    final controllers = registerTestControllers();
+    await controllers.theme.setThemeMode(ThemeMode.light);
+
+    installMock((options) {
+      if (options.path == '/search/repositories') {
+        return jsonResponse(searchReposJson());
+      }
+      if (options.path == '/rate_limit') {
+        return jsonResponse(rateLimitJson());
+      }
+      return jsonResponse(<String, dynamic>{});
+    });
+
+    await tester.pumpWidget(buildTestApp(const MainPage()));
+    await tester.pumpAndSettle();
+
+    BottomNavigationBar readNavBar() =>
+        tester.widget<BottomNavigationBar>(find.byType(BottomNavigationBar));
+
+    Iterable<AnimatedContainer> activePills(Color expectedColor) => tester
+        .widgetList<AnimatedContainer>(find.byType(AnimatedContainer))
+        .where(
+          (box) => (box.decoration as BoxDecoration?)?.color == expectedColor,
+        );
+
+    // 亮色模式下选中色使用 GitHub 蓝并展示单个活跃胶囊，四个 Tab 具备明显态差
+    expect(readNavBar().selectedItemColor, AppThemePalette.light.primary);
+    expect(
+      readNavBar().selectedItemColor,
+      isNot(readNavBar().unselectedItemColor),
+    );
+    expect(find.byIcon(Icons.explore), findsOneWidget);
+    expect(activePills(AppThemePalette.light.primarySurface).length, 1);
+
+    await tester.tap(find.text('搜索'));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.search_rounded), findsOneWidget);
+    expect(activePills(AppThemePalette.light.primarySurface).length, 1);
+
+    await tester.tap(find.text('动态'));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.dynamic_feed), findsOneWidget);
+    expect(activePills(AppThemePalette.light.primarySurface).length, 1);
+
+    await tester.tap(find.text('我的'));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.person), findsOneWidget);
+
+    // 切至暗色模式，验证高亮主色与胶囊底色同步切换
+    await controllers.theme.setThemeMode(ThemeMode.dark);
+    await tester.pumpAndSettle();
+    expect(readNavBar().selectedItemColor, AppThemePalette.dark.primary);
+    expect(
+      activePills(AppThemePalette.dark.primary.withValues(alpha: 0.18)).length,
+      1,
+    );
   });
 }

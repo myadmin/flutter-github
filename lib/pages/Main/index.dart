@@ -18,8 +18,12 @@ import 'package:gh_explorer/utils/toast_utils.dart';
 /// 底部 4 个主导航 Tab 定义（使用 Dart 3 Record 保存静态结构）
 final List<({IconData icon, IconData activeIcon, String label})> _tabList = [
   (icon: Icons.explore_outlined, activeIcon: Icons.explore, label: '探索'),
-  (icon: Icons.search_outlined, activeIcon: Icons.search, label: '搜索'),
-  (icon: Icons.rss_feed_outlined, activeIcon: Icons.rss_feed, label: '动态'),
+  (icon: Icons.search_outlined, activeIcon: Icons.search_rounded, label: '搜索'),
+  (
+    icon: Icons.dynamic_feed_outlined,
+    activeIcon: Icons.dynamic_feed,
+    label: '动态',
+  ),
   (icon: Icons.person_outline, activeIcon: Icons.person, label: '我的'),
 ];
 
@@ -167,6 +171,25 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
+  /// 渲染底部导航图标：选中态附带胶囊高亮底色与放大尺寸，确保「搜索/动态」切换一目了然
+  Widget _buildTabIcon(IconData iconData, {required bool active}) {
+    final colors = context.appColors;
+    final activePillColor = colors.isDark
+        ? colors.primary.withValues(alpha: 0.18)
+        : colors.primarySurface;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      margin: const EdgeInsets.only(bottom: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+      decoration: BoxDecoration(
+        color: active ? activePillColor : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Icon(iconData, size: active ? 22 : 21),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -184,21 +207,40 @@ class _MainPageState extends State<MainPage> {
             ],
           ),
         ),
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          showUnselectedLabels: true,
-          unselectedItemColor: context.appColors.textSecondary,
-          selectedItemColor: context.appColors.brandDark,
-          backgroundColor: context.appColors.pageBackground,
-          type: BottomNavigationBarType.fixed,
-          onTap: _selectTab,
-          items: [
-            for (final item in _tabList)
-              BottomNavigationBarItem(
-                icon: Icon(item.icon),
-                activeIcon: Icon(item.activeIcon),
-                label: item.label,
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Divider(
+              height: 0.8,
+              thickness: 0.8,
+              color: context.appColors.divider.withValues(alpha: 0.7),
+            ),
+            BottomNavigationBar(
+              currentIndex: _currentIndex,
+              showUnselectedLabels: true,
+              selectedFontSize: 12,
+              unselectedFontSize: 12,
+              selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
+              unselectedLabelStyle: const TextStyle(
+                fontWeight: FontWeight.w500,
               ),
+              unselectedItemColor: context.appColors.textSecondary.withValues(
+                alpha: 0.82,
+              ),
+              selectedItemColor: context.appColors.primary,
+              backgroundColor: context.appColors.cardBackground,
+              elevation: 0,
+              type: BottomNavigationBarType.fixed,
+              onTap: _selectTab,
+              items: [
+                for (final item in _tabList)
+                  BottomNavigationBarItem(
+                    icon: _buildTabIcon(item.icon, active: false),
+                    activeIcon: _buildTabIcon(item.activeIcon, active: true),
+                    label: item.label,
+                  ),
+              ],
+            ),
           ],
         ),
       ),
