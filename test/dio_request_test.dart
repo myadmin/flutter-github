@@ -188,6 +188,127 @@ void main() {
     );
   });
 
+  test('422 从 errors[].message 提取真实原因，429 与 5xx 分别给出可读提示', () async {
+    installMock((options) {
+      return jsonResponse({
+        'message': 'Validation Failed',
+        'errors': [
+          {
+            'resource': 'Issue',
+            'field': 'title',
+            'message': 'title is too long',
+          },
+          {'resource': 'Issue', 'field': 'body', 'message': 'body is required'},
+        ],
+      }, statusCode: 422);
+    });
+    await expectLater(
+      () => dioRequest.post('/repos/flutter/flutter/issues', data: {}),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.code, 'code', '422')
+            .having((e) => e.message, 'message', contains('title is too long'))
+            .having((e) => e.message, 'message', contains('body is required')),
+      ),
+    );
+
+    installMock((options) {
+      return jsonResponse({'message': 'Validation Failed'}, statusCode: 422);
+    });
+    await expectLater(
+      () => dioRequest.post('/repos/flutter/flutter/issues', data: {}),
+      throwsA(
+        isA<ApiException>().having(
+          (e) => e.message,
+          'message',
+          contains('请检查输入内容'),
+        ),
+      ),
+    );
+
+    installMock((options) {
+      return jsonResponse({'message': 'Too Many Requests'}, statusCode: 429);
+    });
+    await expectLater(
+      () => dioRequest.get('/user'),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.code, 'code', '429')
+            .having((e) => e.message, 'message', contains('操作过于频繁')),
+      ),
+    );
+
+    installMock((options) {
+      return jsonResponse({'message': 'Server Error'}, statusCode: 503);
+    });
+    await expectLater(
+      () => dioRequest.get('/user'),
+      throwsA(
+        isA<NetworkException>().having(
+          (e) => e.message,
+          'message',
+          contains('503'),
+        ),
+      ),
+    );
+  });
+
+  test('getPaged 无 Link 头时满页不再猜测还有下一页', () async {
+    installMock(
+      (options) => jsonResponse([
+        {'id': 1},
+        {'id': 2},
+      ]),
+    );
+    final page = await dioRequest.getPaged('/user/starred', perPage: 2);
+    expect(page.hasNextPage, isFalse);
+    expect(page.data, hasLength(2));
+
+    installMock(
+      (options) => jsonResponse([
+        {'id': 1},
+        {'id': 2},
+        {'id': 3},
+      ]),
+    );
+    final overflow = await dioRequest.getPaged('/user/starred', perPage: 2);
+    expect(overflow.hasNextPage, isTrue);
+  });
+
+  test('写操作成功后失效 ETag 缓存，避免 304 复用旧数据', () async {
+    var served304 = false;
+    final mock = installMock((options) {
+      if (options.headers.containsKey('If-None-Match')) {
+        served304 = true;
+        return emptyResponse(statusCode: 304);
+      }
+      return jsonResponse(
+        {'stargazers_count': 1},
+        headers: {
+          'etag': ['"abc123"'],
+        },
+      );
+    });
+
+    final first = await dioRequest.get('/repos/flutter/flutter');
+    expect(first, {'stargazers_count': 1});
+    expect(mock.requests.single.headers.containsKey('If-None-Match'), isFalse);
+
+    // 命中缓存：第二次带 If-None-Match，服务端返回 304 时复用本地数据
+    final second = await dioRequest.get('/repos/flutter/flutter');
+    expect(second, {'stargazers_count': 1});
+    expect(served304, isTrue);
+    expect(mock.requests.last.headers['If-None-Match'], '"abc123"');
+
+    // 写操作（如点 Star）后缓存必须失效，否则后续读会拿到旧计数
+    await dioRequest.put('/user/starred/flutter/flutter');
+    mock.requests.clear();
+    served304 = false;
+    await dioRequest.get('/repos/flutter/flutter');
+    expect(served304, isFalse);
+    expect(mock.requests.single.headers.containsKey('If-None-Match'), isFalse);
+  });
+
   test('search 接口速率限制不会覆盖 core 配额，onResourceRateLimitUpdate 区分资源域', () async {
     int? coreLimit;
     final recorded = <(String, int, int)>[];

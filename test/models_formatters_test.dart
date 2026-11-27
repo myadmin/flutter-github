@@ -39,6 +39,10 @@ void main() {
     expect(formatCompactNumber(1250), '1.3k');
     expect(formatCompactNumber(125000), '125k');
     expect(formatCompactNumber(1500000), '1.5m');
+    // 999999 若直接 floor 到 k 会显示成 '1000k'，必须进位到 m
+    expect(formatCompactNumber(999999), '1.0m');
+    expect(formatCompactNumber(999499), '999k');
+    expect(formatCompactNumber(-1), '0');
 
     final now = DateTime(2026, 11, 25, 12, 0);
     expect(formatRelativeTime(now, now: now), '刚刚');
@@ -86,8 +90,29 @@ void main() {
     final repo = RepoItem.fromJson(repoJson());
     expect(repo.ownerLogin, 'flutter');
     expect(repo.repoName, 'flutter');
+    // watch 人数只取 subscribers_count：watchers_count 现等价于星标数，不能回退
     expect(repo.watchCount, 3600);
+
+    final noSubscribers = RepoItem.fromJson(
+      repoJson()..remove('subscribers_count'),
+    );
+    expect(noSubscribers.watchCount, 0, reason: '缺少订阅数时不得把星标数当订阅数');
     expect(repo.license?.displayName, 'BSD-3-Clause');
+
+    final renamed = CommitFileChange.fromJson({
+      'filename': 'lib/new.dart',
+      'previous_filename': 'lib/old.dart',
+      'status': 'Renamed',
+    });
+    expect(renamed.statusBadge, 'R');
+    expect(renamed.displayPath, 'lib/old.dart → lib/new.dart');
+
+    final modified = CommitFileChange.fromJson({
+      'filename': 'lib/a.dart',
+      'previous_filename': 'lib/b.dart',
+      'status': 'modified',
+    });
+    expect(modified.displayPath, 'lib/a.dart');
 
     final commit = CommitItem.fromJson(commitJson());
     expect(commit.shortSha, '1234567');
@@ -96,6 +121,17 @@ void main() {
     final issue = IssueItem.fromJson(issueJson(isPr: true));
     expect(issue.isPullRequest, isTrue);
     expect(issue.isOpen, isTrue);
+    expect(issue.closedAt, isNull);
+    final closedAt = DateTime.utc(2026, 11, 26, 9);
+    final updated = issue.copyWith(
+      state: 'closed',
+      closedAt: closedAt,
+      updatedAt: closedAt,
+    );
+    expect(updated.state, 'closed');
+    expect(updated.closedAt, closedAt, reason: 'copyWith 需支持状态变更时间');
+    expect(updated.updatedAt, closedAt);
+    expect(updated.createdAt, issue.createdAt, reason: '未传入的字段保持原值');
 
     final event = GithubEvent.fromJson(eventJson(type: 'WatchEvent'));
     expect(event.actionText, 'Star 了仓库');

@@ -155,6 +155,11 @@ RateLimitState _parseRateBucket(
   Map<String, dynamic> bucket, {
   int defaultLimit = 60,
 }) {
+  // 响应里缺少该配额桶时不能退回默认值：那会让 UI 把「未知」显示成「满额」。
+  // limit = 0 对应 `RateLimitState.isKnown == false`，页面会走「暂无数据」分支。
+  if (bucket.isEmpty) {
+    return const RateLimitState(limit: 0, remaining: 0);
+  }
   final resetEpoch = asInt(bucket['reset']);
   return RateLimitState(
     limit: asInt(bucket['limit'], fallback: defaultLimit),

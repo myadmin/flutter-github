@@ -265,31 +265,35 @@ class _SearchViewState extends State<SearchView> {
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _keywordController,
-                  textInputAction: TextInputAction.search,
-                  onSubmitted: (_) => _submitSearch(),
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    hintText: '搜索仓库、用户（如 flutter、language:dart）',
-                    hintStyle: context.captionStyle,
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    suffixIcon: _keywordController.text.isNotEmpty
-                        ? IconButton(
-                            onPressed: _clearQuery,
-                            icon: const Icon(Icons.clear, size: 18),
-                            tooltip: '清空',
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: context.appColors.inputFill,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                      borderSide: BorderSide.none,
+                // 仅清空按钮依赖输入内容，用局部 ValueListenableBuilder 重建输入框，
+                // 避免每次击键都触发整个搜索页与结果列表重建
+                child: ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _keywordController,
+                  builder: (context, value, _) => TextField(
+                    controller: _keywordController,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) => _submitSearch(),
+                    decoration: InputDecoration(
+                      hintText: '搜索仓库、用户（如 flutter、language:dart）',
+                      hintStyle: context.captionStyle,
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      suffixIcon: value.text.isNotEmpty
+                          ? IconButton(
+                              onPressed: _clearQuery,
+                              icon: const Icon(Icons.clear, size: 18),
+                              tooltip: '清空',
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: context.appColors.inputFill,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                   ),
                 ),

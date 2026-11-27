@@ -23,6 +23,14 @@ class GhMarkdownView extends StatelessWidget {
   final String repo;
   final String branch;
 
+  /// 相对路径前缀与 shields.io 徽章路径的正则提升为静态常量：
+  /// 原先每次 build 都会重新编译 RegExp，README 图片多时开销可观
+  static final RegExp _relativePrefix = RegExp(r'^\.?/');
+  static final RegExp _shieldsBadgePath = RegExp(
+    r'/badge/([^/?#]+)',
+    caseSensitive: false,
+  );
+
   /// 解析同仓库相对链接或 GitHub 站内链接，可命中应用内页面时优先端内跳转
   bool _tryOpenInApp(BuildContext context, String rawHref) {
     final trimmed = rawHref.trim();
@@ -36,7 +44,7 @@ class GhMarkdownView extends StatelessWidget {
             .first
             .split('?')
             .first
-            .replaceFirst(RegExp(r'^\.?/'), '');
+            .replaceFirst(_relativePrefix, '');
         if (cleanPath.isEmpty) return false;
         if (cleanPath.endsWith('/')) {
           Navigator.pushNamed(
@@ -250,10 +258,7 @@ class GhMarkdownView extends StatelessWidget {
     final c = context.appColors;
     var label = (alt ?? '').trim();
     if (label.isEmpty) {
-      final shieldsMatch = RegExp(
-        r'/badge/([^/?#]+)',
-        caseSensitive: false,
-      ).firstMatch(url);
+      final shieldsMatch = _shieldsBadgePath.firstMatch(url);
       if (shieldsMatch != null) {
         final rawSeg = Uri.decodeComponent(shieldsMatch.group(1) ?? '');
         final parts = rawSeg.split('-');

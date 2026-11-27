@@ -293,11 +293,11 @@ const label = 'UndoNotice';''';
       await tester.tap(find.text('2'));
       await tester.pump();
 
-      // 文件内查找与上下跳转
+      // 文件内查找与上下跳转（输入防抖 250ms 后才重算匹配）
       await tester.tap(find.byIcon(Icons.search));
       await tester.pump();
       await tester.enterText(find.byType(TextField), 'Undo');
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('1/3'), findsOneWidget);
       await tester.tap(find.byIcon(Icons.keyboard_arrow_down));

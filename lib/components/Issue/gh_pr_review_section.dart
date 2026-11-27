@@ -66,16 +66,52 @@ class GhPrSummaryCard extends StatelessWidget {
     }
   }
 
+  /// 每位审阅者仅保留「最新一条有结论的审阅」。
+  ///
+  /// 只有 APPROVED / CHANGES_REQUESTED / DISMISSED 会改变合并结论，
+  /// 后续的 COMMENTED（仅评论）或 PENDING 不得覆盖更早的结论，
+  /// 否则已批准会被显示成「已审阅」，已驳回会被显示成「已批准」。
+  static List<PullRequestReview> latestDecisiveReviews(
+    List<PullRequestReview> reviews,
+  ) {
+    final latest = <String, PullRequestReview>{};
+    for (final review in reviews) {
+      final login = review.user.login;
+      if (login.isEmpty) continue;
+      final state = review.state.toUpperCase();
+      if (state != 'APPROVED' &&
+          state != 'CHANGES_REQUESTED' &&
+          state != 'DISMISSED') {
+        continue;
+      }
+      final prev = latest[login];
+      if (prev == null || _isSubmittedLater(review, prev)) {
+        latest[login] = review;
+      }
+    }
+    return latest.values.toList(growable: false);
+  }
+
+  /// 判断 [candidate] 是否比 [current] 提交更晚；缺失时间戳时以列表后出现者为准
+  /// （GitHub reviews 接口按提交时间升序返回）。
+  static bool _isSubmittedLater(
+    PullRequestReview candidate,
+    PullRequestReview current,
+  ) {
+    final candidateAt = candidate.submittedAt;
+    final currentAt = current.submittedAt;
+    if (candidateAt != null && currentAt != null) {
+      return candidateAt.isAfter(currentAt);
+    }
+    if (candidateAt != null) return true;
+    if (currentAt == null) return true;
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    // 对每位审阅者仅保留最新一条非空审阅结论
-    final latestByUser = <String, PullRequestReview>{};
-    for (final review in reviews) {
-      if (review.user.login.isNotEmpty) {
-        latestByUser[review.user.login] = review;
-      }
-    }
+    final latestByUser = latestDecisiveReviews(reviews);
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -130,7 +166,7 @@ class GhPrSummaryCard extends StatelessWidget {
               spacing: 6,
               runSpacing: 6,
               children: [
-                for (final review in latestByUser.values)
+                for (final review in latestByUser)
                   Builder(
                     builder: (context) {
                       final (fg, bg) = _reviewTone(context, review.state);
@@ -215,7 +251,7 @@ class GhPrSummaryCard extends StatelessWidget {
 }
 
 /// PR 行内代码审阅评论卡片（展示文件路径、行号、Diff 上下文片段与审阅正文）
-class GhPrReviewCommentTile extends StatelessWidget {
+class GhPrReviewCommentTile extends StatefulWidget {
   const GhPrReviewCommentTile({
     super.key,
     required this.comment,
@@ -227,17 +263,50 @@ class GhPrReviewCommentTile extends StatelessWidget {
   final String owner;
   final String repoName;
 
+  /// 只保留 diffHunk 末尾 4 行作为上下文预览，避免长 hunk 撑满卡片
+  static String buildPreviewHunk(String diffHunk) {
+    if (diffHunk.isEmpty) return '';
+    final lines = diffHunk
+        .replaceAll('\r\n', '\n')
+        .split('\n')
+        .where((line) => line.isNotEmpty)
+        .toList();
+    if (lines.isEmpty) return '';
+    final start = lines.length > 4 ? lines.length - 4 : 0;
+    return lines.sublist(start).join('\n');
+  }
+
+  @override
+  State<GhPrReviewCommentTile> createState() => _GhPrReviewCommentTileState();
+}
+
+class _GhPrReviewCommentTileState extends State<GhPrReviewCommentTile> {
+  /// 父列表每次 setState 都会重建本卡片，hunk 解析结果缓存在 State 内只算一次
+  late String _previewHunk;
+
+  @override
+  void initState() {
+    super.initState();
+    _previewHunk = GhPrReviewCommentTile.buildPreviewHunk(
+      widget.comment.diffHunk,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant GhPrReviewCommentTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.comment.diffHunk != widget.comment.diffHunk) {
+      _previewHunk = GhPrReviewCommentTile.buildPreviewHunk(
+        widget.comment.diffHunk,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final hunkLines = comment.diffHunk
-        .replaceAll('\r\n', '\n')
-        .split('\n')
-        .where((l) => l.isNotEmpty)
-        .toList();
-    final previewHunk = hunkLines.length > 4
-        ? hunkLines.sublist(hunkLines.length - 4).join('\n')
-        : hunkLines.join('\n');
+    final comment = widget.comment;
+    final previewHunk = _previewHunk;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -292,7 +361,11 @@ class GhPrReviewCommentTile extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 8),
-          GhMarkdownView(data: comment.body, owner: owner, repo: repoName),
+          GhMarkdownView(
+            data: comment.body,
+            owner: widget.owner,
+            repo: widget.repoName,
+          ),
         ],
       ),
     );

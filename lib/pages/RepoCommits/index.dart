@@ -12,6 +12,7 @@ import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/repo.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
+import 'package:gh_explorer/utils/api_exception.dart';
 import 'package:gh_explorer/utils/formatters.dart';
 import 'package:gh_explorer/utils/paged_list.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
@@ -75,6 +76,7 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
   }
 
   Future<void> _loadBranches() async {
+    _branchesToken?.cancel();
     final token = CancelToken();
     _branchesToken = token;
     try {
@@ -84,9 +86,17 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
         maxPages: 1,
         cancelToken: token,
       );
-      if (!mounted) return;
+      if (!mounted || token.isCancelled) return;
       setState(() => _branches = list);
-    } catch (_) {}
+    } catch (e) {
+      // 分支列表只影响 AppBar 的分支切换按钮，失败时不能静默：
+      // 否则按钮凭空消失，用户既看不到原因也没有重试入口。
+      if (!mounted || e is RequestCancelledException) return;
+      ToastUtils.showToast(
+        context,
+        resolveErrorMessage(e, fallback: '分支列表加载失败'),
+      );
+    }
   }
 
   void _switchBranch(String branch) {

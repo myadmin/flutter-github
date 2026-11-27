@@ -20,6 +20,7 @@ import 'package:gh_explorer/stores/theme_controller.dart';
 import 'package:gh_explorer/stores/token_manager.dart';
 import 'package:gh_explorer/stores/user_controller.dart';
 import 'package:gh_explorer/utils/api_exception.dart';
+import 'package:gh_explorer/utils/dio_request.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -207,6 +208,9 @@ class _MineViewState extends State<MineView> {
     );
     if (confirmed != true) return;
     await tokenManager.removeToken();
+    // 退出登录后必须清空 ETag 缓存：缓存键含鉴权指纹，但同 token 重新登录时
+    // 仍可能复用旧账号的 304 数据，清空可确保首屏一定走真实请求。
+    dioRequest.clearEtagCache();
     _userController.clearUserInfo();
     _starSyncController.clearAll();
     _rateLimitController.reset();
@@ -225,6 +229,7 @@ class _MineViewState extends State<MineView> {
           ),
           child: RefreshIndicator(
             onRefresh: () async {
+              String errorMessage = '';
               if (_userController.isLoggedIn) {
                 try {
                   final res = await getCurrentUserAPI();
@@ -232,9 +237,15 @@ class _MineViewState extends State<MineView> {
                     res.user,
                     tokenScopes: res.scopes,
                   );
-                } catch (_) {}
+                } catch (e) {
+                  // 静默吞掉会让「下拉没反应」无从排查，至少给出一次提示
+                  errorMessage = resolveErrorMessage(e, fallback: '刷新用户信息失败');
+                }
               }
               await _refreshRateLimit(silent: true);
+              if (errorMessage.isNotEmpty && context.mounted) {
+                ToastUtils.showToast(context, errorMessage);
+              }
             },
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),

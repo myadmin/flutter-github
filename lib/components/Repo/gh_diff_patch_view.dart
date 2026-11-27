@@ -36,12 +36,39 @@ class _GhDiffFileCardState extends State<GhDiffFileCard> {
   static const int _maxPreviewLines = 400;
   bool _showAllLines = false;
 
+  /// 已按行切分的 patch 缓存：patch 不变时不必每次 build 重新 replaceAll + split
+  String? _cachedPatch;
+  List<String> _cachedLines = const <String>[];
+  List<DiffLineKind> _cachedKinds = const <DiffLineKind>[];
+
   @override
   void didUpdateWidget(covariant GhDiffFileCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initiallyExpanded != widget.initiallyExpanded) {
       _expanded = widget.initiallyExpanded;
     }
+    // 同一个 State 被复用到另一个文件时，必须重置「展开全部」，
+    // 否则上一张卡片的展开状态会串到新文件上。
+    if (oldWidget.file.filename != widget.file.filename ||
+        oldWidget.file.patch != widget.file.patch) {
+      _showAllLines = false;
+    }
+  }
+
+  /// 按需切分并缓存 patch 行与行类型（仅保留一份，patch 变化时重建）
+  ///
+  /// 行类型判定是 O(n) 全量扫描，折叠态只渲染前 [_maxPreviewLines] 行，
+  /// 但展开全部后仍需要完整分类，因此缓存到 State 中避免每次 build 重算。
+  (List<String>, List<DiffLineKind>) _parsePatch(String patch) {
+    if (_cachedPatch == patch) return (_cachedLines, _cachedKinds);
+    final lines = patch
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .split('\n');
+    _cachedPatch = patch;
+    _cachedLines = lines;
+    _cachedKinds = _classifyPatch(lines);
+    return (_cachedLines, _cachedKinds);
   }
 
   (Color, Color) _statusColors(BuildContext context, String status) {
@@ -202,11 +229,7 @@ class _GhDiffFileCardState extends State<GhDiffFileCard> {
         child: Text('二进制文件或变更过大，暂未返回文本 Diff', style: context.captionStyle),
       );
     }
-    final lines = patch
-        .replaceAll('\r\n', '\n')
-        .replaceAll('\r', '\n')
-        .split('\n');
-    final kinds = _classifyPatch(lines);
+    final (lines, kinds) = _parsePatch(patch);
     final visibleCount = _showAllLines || lines.length <= _maxPreviewLines
         ? lines.length
         : _maxPreviewLines;

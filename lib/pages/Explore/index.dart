@@ -103,11 +103,21 @@ class _ExploreViewState extends State<ExploreView> {
       _tagsController.selectedTags,
       _tagsController.showAllTag,
     ], (_) => _syncSelectedLanguageWithTags());
-    unawaited(_tagsController.ensureLoaded());
     _loadRecentFootprints();
     // 足迹在其他页面被写入/清空时同步刷新「继续浏览」，避免展示过期数据
     FootprintStore.revision.addListener(_onFootprintChanged);
-    _loadInitialHomeData();
+    // 冷启动时标签是异步读盘的：若先按空标签集发首屏请求，等标签读完后
+    // 又会被 _syncSelectedLanguageWithTags 触发一次 clear + refresh，
+    // 白白多消耗一次搜索配额。改为等标签就绪后再发首屏请求。
+    unawaited(_ensureTagsThenLoad());
+  }
+
+  /// 等待本地标签就绪 → 校正选中语言 → 拉取首屏数据
+  Future<void> _ensureTagsThenLoad() async {
+    await _tagsController.ensureLoaded();
+    if (!mounted) return;
+    _syncSelectedLanguageWithTags(refresh: false);
+    await _loadInitialHomeData();
   }
 
   @override
@@ -124,8 +134,11 @@ class _ExploreViewState extends State<ExploreView> {
     unawaited(_loadRecentFootprints());
   }
 
-  /// 当用户在设置页移除了当前正在浏览的顶部标签时，自动切回「全部」或首个可用标签并刷新
-  void _syncSelectedLanguageWithTags() {
+  /// 当用户在设置页移除了当前正在浏览的顶部标签时，自动切回「全部」或首个可用标签并刷新。
+  ///
+  /// [refresh] 为 false 时只校正选中语言而不发请求，供首屏加载复用，
+  /// 避免与紧随其后的 `_loadInitialHomeData()` 重复拉取。
+  void _syncSelectedLanguageWithTags({bool refresh = true}) {
     if (!mounted) return;
     final tags = _tagsController.displayTags;
     if (tags.isEmpty || tags.contains(_selectedLanguage)) return;
@@ -133,6 +146,7 @@ class _ExploreViewState extends State<ExploreView> {
         ? ExploreTagsController.allTag
         : tags.first;
     setState(() => _selectedLanguage = fallback);
+    if (!refresh) return;
     _list.clear();
     unawaited(_list.refresh());
   }

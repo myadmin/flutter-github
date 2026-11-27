@@ -141,8 +141,11 @@ class RepoItem {
     return '';
   }
 
-  /// 详情页优先展示 subscribersCount（实际 Watch 数），缺失时回退 watchersCount
-  int get watchCount => subscribersCount > 0 ? subscribersCount : watchersCount;
+  /// Watch（订阅）人数。
+  ///
+  /// 注意不能回退到 `watchersCount`：GitHub 的 `watchers_count` 现在等价于星标数，
+  /// 回退会把 Star 数当 Watch 数展示（历史遗留的 API 命名问题）。
+  int get watchCount => subscribersCount;
 
   /// 从 GitHub 仓库接口响应反序列化
   factory RepoItem.fromJson(Map<String, dynamic> json) {
@@ -348,8 +351,9 @@ class CommitFileChange {
     }
   }
 
-  /// 兼容重命名路径展示
-  String get displayPath => previousFilename.isNotEmpty && status == 'renamed'
+  /// 兼容重命名路径展示（状态判断统一小写，与 [statusBadge] 保持一致）
+  String get displayPath =>
+      previousFilename.isNotEmpty && status.toLowerCase() == 'renamed'
       ? '$previousFilename → $filename'
       : filename;
 

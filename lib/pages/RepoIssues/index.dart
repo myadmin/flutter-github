@@ -166,9 +166,12 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
     }
   }
 
+  /// 直接按编号直达的匹配模式，提为静态常量避免 build 中反复编译正则
+  static final RegExp _directIssuePattern = RegExp(r'^#?(\d+)$');
+
   int? get _directIssueNumber {
     final trimmed = _activeQuery.trim();
-    final match = RegExp(r'^#?(\d+)$').firstMatch(trimmed);
+    final match = _directIssuePattern.firstMatch(trimmed);
     if (match == null) return null;
     final n = int.tryParse(match.group(1) ?? '');
     return (n != null && n > 0) ? n : null;
@@ -246,36 +249,40 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
                     Row(
                       children: [
                         Expanded(
-                          child: TextField(
-                            controller: _keywordController,
-                            textInputAction: TextInputAction.search,
-                            onSubmitted: (_) => _submitSearch(),
-                            onChanged: (_) => setState(() {}),
-                            decoration: InputDecoration(
-                              hintText: '搜索当前项目全部 Issues / PR（如关键词或 #编号）',
-                              hintStyle: context.captionStyle,
-                              isDense: true,
-                              prefixIcon: const Icon(Icons.search, size: 19),
-                              suffixIcon:
-                                  _keywordController.text.isNotEmpty ||
-                                      _activeQuery.isNotEmpty
-                                  ? IconButton(
-                                      onPressed: _clearSearch,
-                                      icon: const Icon(Icons.clear, size: 18),
-                                      tooltip: '清空搜索',
-                                    )
-                                  : null,
-                              filled: true,
-                              fillColor: context.appColors.inputFill,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 9,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.pill,
+                          // 输入内容只影响「清空」按钮，用 ValueListenableBuilder
+                          // 局部重建，避免每次击键都重刷整个 Issue 列表
+                          child: ValueListenableBuilder<TextEditingValue>(
+                            valueListenable: _keywordController,
+                            builder: (context, value, _) => TextField(
+                              controller: _keywordController,
+                              textInputAction: TextInputAction.search,
+                              onSubmitted: (_) => _submitSearch(),
+                              decoration: InputDecoration(
+                                hintText: '搜索当前项目全部 Issues / PR（如关键词或 #编号）',
+                                hintStyle: context.captionStyle,
+                                isDense: true,
+                                prefixIcon: const Icon(Icons.search, size: 19),
+                                suffixIcon:
+                                    value.text.isNotEmpty ||
+                                        _activeQuery.isNotEmpty
+                                    ? IconButton(
+                                        onPressed: _clearSearch,
+                                        icon: const Icon(Icons.clear, size: 18),
+                                        tooltip: '清空搜索',
+                                      )
+                                    : null,
+                                filled: true,
+                                fillColor: context.appColors.inputFill,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 9,
                                 ),
-                                borderSide: BorderSide.none,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.pill,
+                                  ),
+                                  borderSide: BorderSide.none,
+                                ),
                               ),
                             ),
                           ),

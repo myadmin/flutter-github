@@ -4,6 +4,8 @@ String formatCompactNumber(int value) {
   if (value < 1000) return '$value';
   if (value < 1000000) {
     final double k = value / 1000;
+    // 999500 以上四舍五入后会得到 "1000k"，应进位到 m 量级
+    if (k >= 999.5) return '1.0m';
     return k >= 100 ? '${k.round()}k' : '${k.toStringAsFixed(1)}k';
   }
   final double m = value / 1000000;
@@ -36,12 +38,15 @@ String formatRelativeTime(DateTime? dateTime, {DateTime? now}) {
   return '${local.year}-$month-$day';
 }
 
+/// `Link` 头中的 `rel="next"` 标记，提升为顶层常量避免每次分页请求重复编译正则
+final RegExp _nextPageRelPattern = RegExp(r'rel="next"');
+
 /// 从 GitHub `Link` 响应头中判断是否还有下一页（`rel="next"`）
 bool parseHasNextPage(String? linkHeader) {
   if (linkHeader == null || linkHeader.isEmpty) {
     return false;
   }
-  return RegExp(r'rel="next"').hasMatch(linkHeader);
+  return _nextPageRelPattern.hasMatch(linkHeader);
 }
 
 /// 将 README 中的相对图片路径修正为 GitHub Raw 绝对地址

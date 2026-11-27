@@ -38,13 +38,15 @@ class _MyStarsPageState extends State<MyStarsPage> {
             page: page,
             cancelToken: _list.cancelToken,
           );
-          for (final repo in res.items) {
-            _starSync.setSnapshot(
-              repo.fullName,
-              isStarred: true,
-              starCount: repo.stargazersCount,
-            );
-          }
+          // 整页一次性合并写入，避免逐条写 RxMap 引发 N 次响应式通知
+          // （每张卡片各有一个 Obx 订阅同一 Map，逐条写会造成通知放大）
+          _starSync.setSnapshots({
+            for (final repo in res.items)
+              repo.fullName: RepoStarSnapshot(
+                isStarred: true,
+                starCount: repo.stargazersCount,
+              ),
+          });
           return res;
         },
         firstPageErrorFallback: '加载 Star 列表失败',

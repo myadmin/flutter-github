@@ -124,7 +124,11 @@ class PagedListController<T> extends ChangeNotifier {
     if (_disposed) return;
     final int before = _items.length;
     _items.removeWhere(test);
-    if (_items.length != before) notifyListeners();
+    if (_items.length == before) return;
+    // 全部移除后 `loadMore()` 会被 `_items.isEmpty` 守卫拦住，若不把 hasMore
+    // 置回 false，列表底部会一直显示「还有更多」却永远加载不出来。
+    if (_items.isEmpty) _hasMore = false;
+    notifyListeners();
   }
 
   /// 清空列表与状态

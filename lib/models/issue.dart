@@ -68,6 +68,9 @@ class IssueItem {
     int? commentsCount,
     bool? isMerged,
     List<IssueLabel>? labels,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? closedAt,
   }) {
     return IssueItem(
       id: id,
@@ -81,9 +84,9 @@ class IssueItem {
       htmlUrl: htmlUrl,
       user: user,
       labels: labels ?? this.labels,
-      createdAt: createdAt,
-      updatedAt: updatedAt,
-      closedAt: closedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      closedAt: closedAt ?? this.closedAt,
     );
   }
 

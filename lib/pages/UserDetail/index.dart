@@ -43,6 +43,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
   int _tabIndex = 0;
   CancelToken? _profileToken;
 
+  /// 资料请求代际序号，防止连续刷新时旧响应覆盖新结果
+  int _profileSeq = 0;
+
   late final PagedListController<RepoItem> _reposList =
       PagedListController<RepoItem>(
         pageSize: GlobalConstants.defaultPageSize,
@@ -114,6 +117,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
     _profileToken?.cancel();
     final token = CancelToken();
     _profileToken = token;
+    // 代际序号：CancelToken 只能阻止「尚未返回」的旧请求，若旧请求的响应已在
+    // 事件队列里排队，取消是来不及的。用序号确保只有最新一次刷新的结果会落地。
+    final int seq = ++_profileSeq;
     setState(() {
       _isLoading = _profile == null;
       _errorMessage = '';
@@ -128,14 +134,16 @@ class _UserDetailPageState extends State<UserDetailPage> {
           : Future<bool>.value(false);
 
       final (profile, following) = await (profileFuture, followFuture).wait;
-      if (!mounted) return;
+      if (!mounted || seq != _profileSeq) return;
       setState(() {
         _profile = profile;
         _isFollowing = following;
         _isLoading = false;
       });
     } catch (e) {
-      if (e is RequestCancelledException || !mounted) return;
+      if (e is RequestCancelledException || !mounted || seq != _profileSeq) {
+        return;
+      }
       setState(() {
         _isLoading = false;
         _errorMessage = resolveErrorMessage(e, fallback: '用户信息加载失败');
@@ -227,15 +235,23 @@ class _UserDetailPageState extends State<UserDetailPage> {
           child: ListenableBuilder(
             listenable: activeList,
             builder: (context, _) {
-              return ListView(
+              // 用 CustomScrollView + SliverList 替代 ListView(children:)：
+              // 后者会把 30 张仓库卡片一次性全部构建出来，滚动前就付出了全部布局成本。
+              return CustomScrollView(
                 controller: _scrollController,
-                padding: const EdgeInsets.all(12),
-                children: [
-                  _buildUserHeader(user),
-                  const SizedBox(height: 12),
-                  _buildTabBar(),
-                  const SizedBox(height: 10),
-                  ..._buildTabContent(activeList),
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                    sliver: SliverList.list(
+                      children: [
+                        _buildUserHeader(user),
+                        const SizedBox(height: 12),
+                        _buildTabBar(),
+                        const SizedBox(height: 10),
+                      ],
+                    ),
+                  ),
+                  ..._buildTabSlivers(activeList),
                 ],
               );
             },
@@ -377,51 +393,69 @@ class _UserDetailPageState extends State<UserDetailPage> {
     );
   }
 
-  List<Widget> _buildTabContent(PagedListController<RepoItem> list) {
+  List<Widget> _buildTabSlivers(PagedListController<RepoItem> list) {
     if (list.isLoading) {
       return const [
-        Padding(
-          padding: EdgeInsets.symmetric(vertical: 40),
-          child: Center(child: CircularProgressIndicator()),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(child: CircularProgressIndicator()),
+          ),
         ),
       ];
     }
     if (list.errorMessage.isNotEmpty && list.isEmpty) {
       return [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 24),
-          child: AppErrorView(
-            message: list.errorMessage,
-            onRetry: list.refresh,
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: AppErrorView(
+              message: list.errorMessage,
+              onRetry: list.refresh,
+            ),
           ),
         ),
       ];
     }
     if (list.isEmpty) {
-      return [
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 32),
-          child: HmEmptyView(icon: Icons.folder_open, title: '暂无项目'),
+      return const [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: HmEmptyView(icon: Icons.folder_open, title: '暂无项目'),
+          ),
         ),
       ];
     }
     return [
-      for (final repo in list.items) ...[
-        GhRepoCard(
-          repo: repo,
-          onTap: () => Navigator.pushNamed(
-            context,
-            AppRoutes.repoDetail(repo.ownerLogin, repo.repoName),
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+        sliver: SliverList.separated(
+          itemCount: list.items.length,
+          itemBuilder: (context, index) {
+            final repo = list.items[index];
+            return GhRepoCard(
+              repo: repo,
+              onTap: () => Navigator.pushNamed(
+                context,
+                AppRoutes.repoDetail(repo.ownerLogin, repo.repoName),
+              ),
+            );
+          },
+          separatorBuilder: (context, index) => const SizedBox(height: 10),
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+          child: HmListFooter(
+            loadingMore: list.loadingMore,
+            hasMore: list.hasMore,
+            failed: list.loadMoreFailed,
+            onRetry: list.retryLoadMore,
+            noMoreText: '已展示全部项目',
           ),
         ),
-        const SizedBox(height: 10),
-      ],
-      HmListFooter(
-        loadingMore: list.loadingMore,
-        hasMore: list.hasMore,
-        failed: list.loadMoreFailed,
-        onRetry: list.retryLoadMore,
-        noMoreText: '已展示全部项目',
       ),
     ];
   }

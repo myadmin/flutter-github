@@ -88,7 +88,10 @@ Future<PageResult<RepoItem>> searchReposAPI({
 }) async {
   final trimmed = query.trim();
   final lang = language.trim();
-  final q = lang.isNotEmpty && lang != '全部' && !trimmed.contains('language:')
+  // 大小写不敏感：用户在搜索框里输入 `Language:Dart` 时，页面层已按小写判定
+  // 为「已指定语言」，这里若用大小写敏感判定就会再拼一次 qualifier，GitHub 返回 422。
+  final hasLanguageQualifier = trimmed.toLowerCase().contains('language:');
+  final q = lang.isNotEmpty && lang != '全部' && !hasLanguageQualifier
       ? '$trimmed language:$lang'
       : trimmed;
 

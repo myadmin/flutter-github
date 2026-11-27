@@ -118,6 +118,44 @@ void main() {
       );
     });
   });
+  group('pruneStaleApks', () {
+    test('清理跨版本旧安装包但保留当前包与其 .part 残留', () async {
+      final dir = await Directory.systemTemp.createTemp('ghx_prune_');
+      addTearDown(() => dir.delete(recursive: true));
+
+      final keep = File('${dir.path}/gh_explorer_v1.4.1_arm64.apk');
+      final keepPart = File('${dir.path}/gh_explorer_v1.4.1_arm64.apk.part');
+      final stale1 = File('${dir.path}/gh_explorer_v1.3.0_arm64.apk');
+      final stale2 = File('${dir.path}/gh_explorer_v1.3.2_x86_64.apk.part');
+      final unrelated = File('${dir.path}/readme.txt');
+      for (final f in [keep, keepPart, stale1, stale2, unrelated]) {
+        await f.writeAsString('x');
+      }
+
+      final removed = await pruneStaleApks(
+        dir.path,
+        keepFileName: 'gh_explorer_v1.4.1_arm64.apk',
+      );
+
+      expect(removed, 2);
+      expect(await keep.exists(), isTrue);
+      expect(await keepPart.exists(), isTrue);
+      expect(await stale1.exists(), isFalse);
+      expect(await stale2.exists(), isFalse);
+      expect(await unrelated.exists(), isTrue, reason: '非安装包文件不得误删');
+    });
+
+    test('目录不存在时安全返回 0', () async {
+      expect(
+        await pruneStaleApks(
+          '${Directory.systemTemp.path}/ghx_missing_dir',
+          keepFileName: 'a.apk',
+        ),
+        0,
+      );
+    });
+  });
+
   group('深链参数守卫', () {
     testWidgets('缺少 owner/name 时回落到未知路由页并提示参数缺失', (tester) async {
       await tester.pumpWidget(

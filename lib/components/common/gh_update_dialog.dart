@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:gh_explorer/components/common/gh_markdown_view.dart';
 import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
+import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/app_release.dart';
 import 'package:gh_explorer/services/app_installer.dart';
 import 'package:gh_explorer/services/app_update_service.dart';
@@ -202,8 +203,8 @@ class _GhUpdateDialogState extends State<_GhUpdateDialog> {
                   const SizedBox(height: 6),
                   GhMarkdownView(
                     data: displayNotes,
-                    owner: 'myadmin',
-                    repo: 'flutter-github',
+                    owner: GlobalConstants.repoOwner,
+                    repo: GlobalConstants.repoName,
                     branch: 'master',
                   ),
                 ],
@@ -373,6 +374,9 @@ class _GhUpdateDialogState extends State<_GhUpdateDialog> {
         ];
 
       case _UpdateDialogStage.error:
+        // 安装失败时安装包已在本地（_downloadedPath 非空），此时重试应直接
+        // 重新调起安装器，而不是让用户再下载一遍 20 MB+ 的安装包。
+        final retryInstall = _downloadedPath != null;
         return [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -380,11 +384,13 @@ class _GhUpdateDialogState extends State<_GhUpdateDialog> {
           ),
           TextButton(onPressed: _openInBrowser, child: const Text('浏览器下载')),
           FilledButton(
-            onPressed: _startInAppUpdate,
+            onPressed: retryInstall
+                ? () => _triggerInstall(_downloadedPath!)
+                : _startInAppUpdate,
             style: FilledButton.styleFrom(
               backgroundColor: context.appColors.primary,
             ),
-            child: const Text('重试下载'),
+            child: Text(retryInstall ? '重新安装' : '重试下载'),
           ),
         ];
     }

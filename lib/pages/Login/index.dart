@@ -41,6 +41,9 @@ class _LoginPageState extends State<LoginPage> {
   // Device Flow 授权状态
   DeviceCodeResponse? _deviceCode;
   Timer? _pollTimer;
+
+  /// 设备码请求在途标记：防止连点重复发起设备授权
+  bool _startingDeviceFlow = false;
   int _remainingSeconds = 0;
   int _pollIntervalSeconds = 5;
   bool _pollingInFlight = false;
@@ -115,6 +118,7 @@ class _LoginPageState extends State<LoginPage> {
 
   /// 发起 OAuth Device Flow 设备码授权
   Future<void> _startDeviceFlow() async {
+    if (_startingDeviceFlow) return;
     if (kIsWeb) {
       ToastUtils.showToast(context, 'Web 端受限于浏览器跨域策略，请使用 PAT 登录');
       return;
@@ -126,6 +130,9 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
+    // 连点会让引用计数与 LoadingDialog 失配（每次 show 都 +1，但成功/失败各只 hide 一次），
+    // 遮罩会因计数不归零永久卡死，因此入口加在途守卫。
+    _startingDeviceFlow = true;
     LoadingDialog.show(context, message: '正在获取设备授权码...');
     try {
       final res = await requestDeviceCodeAPI(clientId);
@@ -145,6 +152,8 @@ class _LoginPageState extends State<LoginPage> {
         context,
         resolveErrorMessage(e, fallback: '获取授权码失败'),
       );
+    } finally {
+      _startingDeviceFlow = false;
     }
   }
 

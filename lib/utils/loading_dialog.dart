@@ -16,10 +16,12 @@ class LoadingDialog {
   static bool get isShowing => _route != null;
 
   static void show(BuildContext context, {String? message = '加载中...'}) {
+    // 必须先判 mounted 再自增：context 已卸载时若先加计数，
+    // 后续 hide() 会多减一次才能归零，导致遮罩永久卡住。
+    if (!context.mounted) return;
     _showCount++;
     _message = message ?? _message;
     if (_route != null) return;
-    if (!context.mounted) return;
 
     final navigator = Navigator.of(context, rootNavigator: true);
     final route = DialogRoute<void>(

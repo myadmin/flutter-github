@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 
+/// GitHub Actions 工作流徽章路径（如 /owner/repo/workflows/ci.yml/badge.svg）
+final RegExp _workflowBadgePath = RegExp(r'/workflows/[^/]+/badge');
+
 /// 判断图片地址是否为 SVG 矢量图或常见动态徽章（Image.network 不支持直接解码）
 bool isSvgImageUrl(String url) {
   final lower = url.trim().toLowerCase();
@@ -11,7 +14,7 @@ bool isSvgImageUrl(String url) {
       lower.contains('shields.io/badge') ||
       lower.contains('badgen.net') ||
       lower.contains('badge.fury.io') ||
-      RegExp(r'/workflows/[^/]+/badge').hasMatch(lower);
+      _workflowBadgePath.hasMatch(lower);
 }
 
 /// 统一网络图片与头像组件，封装占位、SVG 徽章兼容、失败兜底与按需解码尺寸

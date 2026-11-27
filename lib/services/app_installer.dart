@@ -36,13 +36,26 @@ class AppInstaller {
   );
 
   /// 查询当前平台的更新缓存目录与设备支持的 CPU ABI 列表
+  ///
+  /// 原生通道可能因 `MainActivity` 未注册该通道、或宿主 Activity 已销毁而抛
+  /// `MissingPluginException` / `PlatformException`，此时应降级为「环境未知」
+  /// 让上层回退到浏览器下载，而不是把异常抛穿到 UI 层。
   static Future<AndroidInstallEnvironment?> getEnvironment() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       return null;
     }
-    final raw = await channel.invokeMapMethod<String, dynamic>(
-      'getPlatformInstallInfo',
-    );
+    final Map<String, dynamic>? raw;
+    try {
+      raw = await channel.invokeMapMethod<String, dynamic>(
+        'getPlatformInstallInfo',
+      );
+    } on MissingPluginException catch (e) {
+      debugPrint('[AppInstaller] 原生安装通道不可用：$e');
+      return null;
+    } on PlatformException catch (e) {
+      debugPrint('[AppInstaller] 查询安装环境失败：${e.code} ${e.message}');
+      return null;
+    }
     if (raw == null) return null;
     final abis = (raw['supportedAbis'] as List<dynamic>? ?? const [])
         .map((e) => e.toString())
@@ -60,9 +73,18 @@ class AppInstaller {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       return AppInstallStatus.unsupported;
     }
-    final result = await channel.invokeMethod<String>('installApk', {
-      'filePath': filePath,
-    });
+    final String? result;
+    try {
+      result = await channel.invokeMethod<String>('installApk', {
+        'filePath': filePath,
+      });
+    } on MissingPluginException catch (e) {
+      debugPrint('[AppInstaller] 原生安装通道不可用：$e');
+      return AppInstallStatus.unsupported;
+    } on PlatformException catch (e) {
+      debugPrint('[AppInstaller] 拉起安装器失败：${e.code} ${e.message}');
+      return AppInstallStatus.unsupported;
+    }
     switch (result) {
       case 'needs_permission':
         return AppInstallStatus.needsPermission;

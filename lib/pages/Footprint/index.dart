@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:gh_explorer/components/common/app_network_image.dart';
 import 'package:gh_explorer/components/common/gh_language_dot.dart';
@@ -21,8 +23,11 @@ class FootprintPage extends StatefulWidget {
 
 class _FootprintPageState extends State<FootprintPage> {
   final TextEditingController _filterController = TextEditingController();
+
+  /// 当前筛选关键词，独立成 ValueNotifier：输入框击键只重建列表区域，
+  /// 不再整页 setState（原来每次按键都会重建 AppBar、筛选栏与全部卡片）
+  final ValueNotifier<String> _filter = ValueNotifier<String>('');
   List<FootprintItem> _items = const [];
-  String _keyword = '';
   bool _isLoading = true;
 
   @override
@@ -33,6 +38,7 @@ class _FootprintPageState extends State<FootprintPage> {
 
   @override
   void dispose() {
+    _filter.dispose();
     _filterController.dispose();
     super.dispose();
   }
@@ -81,6 +87,19 @@ class _FootprintPageState extends State<FootprintPage> {
     if (!mounted) return;
     setState(() => _items = updated);
     ToastUtils.showToast(context, '已移除 ${item.fullName}');
+  }
+
+  /// 侧滑删除：必须同步从 `_items` 中移除。
+  ///
+  /// `Dismissible` 在动画结束那一帧会校验「被 dismiss 的子树是否仍在树上」，
+  /// 若此时才去 await 落盘再 setState，Widget 仍挂在树上会直接触发框架断言。
+  /// 因此这里先同步更新内存，再异步落盘。
+  void _removeItemImmediately(FootprintItem item) {
+    setState(() {
+      _items = _items.where((e) => e.fullName != item.fullName).toList();
+    });
+    ToastUtils.showToast(context, '已移除 ${item.fullName}');
+    unawaited(FootprintStore.remove(item.fullName));
   }
 
   /// 跳转项目详情，返回后刷新本地足迹排序与浏览时间
@@ -143,18 +162,6 @@ class _FootprintPageState extends State<FootprintPage> {
         ),
       );
     }
-    final query = _keyword.trim().toLowerCase();
-    final filtered = query.isEmpty
-        ? _items
-        : _items
-              .where(
-                (item) =>
-                    item.fullName.toLowerCase().contains(query) ||
-                    item.description.toLowerCase().contains(query) ||
-                    item.language.toLowerCase().contains(query),
-              )
-              .toList();
-    final groups = groupFootprints(filtered);
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(
@@ -165,102 +172,136 @@ class _FootprintPageState extends State<FootprintPage> {
             Container(
               color: context.appColors.cardBackground,
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-              child: TextField(
-                controller: _filterController,
-                onChanged: (value) => setState(() => _keyword = value),
-                decoration: InputDecoration(
-                  hintText: '筛选历史仓库名称、简介或语言...',
-                  hintStyle: context.captionStyle,
-                  isDense: true,
-                  prefixIcon: const Icon(Icons.search, size: 18),
-                  suffixIcon: _keyword.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, size: 16),
-                          onPressed: () {
-                            _filterController.clear();
-                            setState(() => _keyword = '');
-                          },
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: context.appColors.inputFill,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                    borderSide: BorderSide.none,
+              child: ValueListenableBuilder<String>(
+                valueListenable: _filter,
+                builder: (context, keyword, _) => TextField(
+                  controller: _filterController,
+                  onChanged: (value) => _filter.value = value,
+                  decoration: InputDecoration(
+                    hintText: '筛选历史仓库名称、简介或语言...',
+                    hintStyle: context.captionStyle,
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    suffixIcon: keyword.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            onPressed: () {
+                              _filterController.clear();
+                              _filter.value = '';
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: context.appColors.inputFill,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
             ),
+            // 仅筛选结果依赖关键词：击键时只重建下方列表，不重建筛选栏与页面骨架
             Expanded(
-              child: filtered.isEmpty
-                  ? const HmEmptyView(
+              child: ValueListenableBuilder<String>(
+                valueListenable: _filter,
+                builder: (context, keyword, _) {
+                  final query = keyword.trim().toLowerCase();
+                  final filtered = query.isEmpty
+                      ? _items
+                      : _items
+                            .where(
+                              (item) =>
+                                  item.fullName.toLowerCase().contains(query) ||
+                                  item.description.toLowerCase().contains(
+                                    query,
+                                  ) ||
+                                  item.language.toLowerCase().contains(query),
+                            )
+                            .toList();
+                  if (filtered.isEmpty) {
+                    return const HmEmptyView(
                       icon: Icons.search_off,
                       title: '没有匹配的足迹',
                       description: '尝试更换关键词筛选',
-                    )
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
-                      children: [
-                        for (final group in groups) ...[
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(2, 6, 2, 8),
-                            child: Text(
-                              group.title,
-                              style: context.captionStyle.copyWith(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          for (final item in group.items) ...[
-                            Dismissible(
-                              key: ValueKey('footprint_${item.fullName}'),
-                              direction: DismissDirection.endToStart,
-                              background: Container(
-                                alignment: Alignment.centerRight,
-                                padding: const EdgeInsets.only(right: 18),
-                                decoration: BoxDecoration(
-                                  color: context.appColors.badge.withValues(
-                                    alpha: 0.14,
-                                  ),
-                                  borderRadius: BorderRadius.circular(
-                                    AppRadius.card,
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.delete_outline,
-                                  color: context.appColors.badge,
-                                ),
-                              ),
-                              onDismissed: (_) => _removeItem(item),
-                              child: _FootprintTile(
-                                item: item,
-                                timeText: _formatHourMinute(item.viewedAt),
-                                onTap: () => _openRepo(item),
-                                onDelete: () => _removeItem(item),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                          ],
-                        ],
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(
-                            '左滑或点击删除可移除单条记录 · 最多保留 ${FootprintStore.maxItems} 条',
-                            textAlign: TextAlign.center,
-                            style: context.captionSmallStyle,
-                          ),
-                        ),
-                      ],
-                    ),
+                    );
+                  }
+                  return _buildFootprintList(groupFootprints(filtered));
+                },
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  /// 构建按日期分组的足迹列表。
+  ///
+  /// 先摊平成「分组标题 / 足迹条目」的轻量索引，真正的卡片在 `itemBuilder`
+  /// 里按需构建，避免一次把全部分组标题与卡片 Widget 都建出来。
+  Widget _buildFootprintList(List<FootprintGroup> groups) {
+    final rows = <Object>[];
+    for (final group in groups) {
+      rows.add(group.title);
+      rows.addAll(group.items);
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+      itemCount: rows.length + 1,
+      itemBuilder: (context, index) {
+        if (index == rows.length) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              '左滑或点击删除可移除单条记录 · 最多保留 ${FootprintStore.maxItems} 条',
+              textAlign: TextAlign.center,
+              style: context.captionSmallStyle,
+            ),
+          );
+        }
+        final row = rows[index];
+        if (row is String) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(2, 6, 2, 8),
+            child: Text(
+              row,
+              style: context.captionStyle.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          );
+        }
+        final item = row as FootprintItem;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Dismissible(
+            key: ValueKey('footprint_${item.fullName}'),
+            direction: DismissDirection.endToStart,
+            background: Container(
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 18),
+              decoration: BoxDecoration(
+                color: context.appColors.badge.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(AppRadius.card),
+              ),
+              child: Icon(Icons.delete_outline, color: context.appColors.badge),
+            ),
+            onDismissed: (_) => _removeItemImmediately(item),
+            child: _FootprintTile(
+              item: item,
+              timeText: _formatHourMinute(item.viewedAt),
+              onTap: () => _openRepo(item),
+              onDelete: () => _removeItem(item),
+            ),
+          ),
+        );
+      },
     );
   }
 }

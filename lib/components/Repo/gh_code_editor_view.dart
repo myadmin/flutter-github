@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -62,8 +63,23 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
 
   late List<String> _lines;
   late CodeLanguageInfo _language;
-  late List<bool> _blockCommentMask;
-  late int _maxLineUnits;
+
+  /// 跨行注释状态按需惰性计算：大文件（数千行）在 initState 同步扫描会阻塞首帧，
+  /// 而只有真正渲染到的行才需要它，因此推迟到第一次取用时再算一次并缓存。
+  List<bool>? _blockCommentMask;
+
+  /// 最长行的显示宽度单位，仅在横滑模式需要（用于估算内容宽度）
+  int? _maxLineUnits;
+
+  /// 自动换行模式下各行的累计像素偏移，用于「跳转到指定行」时 O(1) 定位
+  List<double>? _wrapRowOffsets;
+  int? _wrapRowOffsetsCharsPerLine;
+  double? _wrapRowOffsetsFontSize;
+
+  /// 查找输入防抖：逐字符全文档扫描在大文件上会明显卡顿
+  Timer? _searchDebounce;
+
+  static const Duration _searchDebounceDuration = Duration(milliseconds: 250);
 
   @override
   void initState() {
@@ -97,6 +113,7 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _verticalController.removeListener(_syncGutterScroll);
     _verticalController.dispose();
     _gutterVerticalController.dispose();
@@ -110,20 +127,28 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
     final normalized = widget.content.replaceAll('\r\n', '\n');
     _lines = normalized.split('\n');
     _language = CodeSyntaxHighlighter.detectLanguage(widget.filePath);
-    _blockCommentMask = CodeSyntaxHighlighter.computeBlockCommentMask(
-      _lines,
-      _language,
-    );
+    // 注释掩码、最长行宽、换行偏移都改为按需计算，避免大文件首帧同步全量扫描
+    _blockCommentMask = null;
+    _maxLineUnits = null;
+    _wrapRowOffsets = null;
+    _invalidateLineSpans();
+  }
 
+  /// 跨行注释掩码（首次取用时计算并缓存）
+  List<bool> get _commentMask => _blockCommentMask ??=
+      CodeSyntaxHighlighter.computeBlockCommentMask(_lines, _language);
+
+  /// 最长行的显示宽度单位（横滑模式估算内容宽度用）
+  int get _maxLineUnitsValue {
+    final cached = _maxLineUnits;
+    if (cached != null) return cached;
     var maxUnits = 0;
     for (final line in _lines) {
       final units = _visualUnits(line);
-      if (units > maxUnits) {
-        maxUnits = units;
-      }
+      if (units > maxUnits) maxUnits = units;
     }
     _maxLineUnits = maxUnits;
-    _invalidateLineSpans();
+    return maxUnits;
   }
 
   void _syncGutterScroll() {
@@ -220,6 +245,15 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
     }
   }
 
+  /// 输入框逐字符触发：先取消上一次待执行任务，250ms 内无输入才真正全文档扫描
+  void _scheduleSearch(String query) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(_searchDebounceDuration, () {
+      if (!mounted) return;
+      _rebuildSearchMatches(query);
+    });
+  }
+
   void _stepMatch(int step) {
     if (_matches.isEmpty) return;
     final next = (_activeMatchIndex + step) % _matches.length;
@@ -247,13 +281,8 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
         12,
         (codeWidth / (_fontSize * 0.62)).floor(),
       );
-      var offset = 0.0;
-      for (var i = 0; i < lineIndex; i++) {
-        final units = math.max(1, _visualUnits(_lines[i]));
-        final wrappedLines = (units / charsPerLine).ceil();
-        offset += wrappedLines * (_fontSize * _lineHeight) + 4;
-      }
-      estimatedOffset = offset - viewportHeight * 0.25;
+      estimatedOffset =
+          _wrapOffsetOfLine(lineIndex, charsPerLine) - viewportHeight * 0.25;
     }
 
     final clamped = estimatedOffset.clamp(
@@ -265,6 +294,32 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
     );
+  }
+
+  /// 自动换行模式下第 [lineIndex] 行的像素起点。
+  ///
+  /// 原先每次跳转都要从头累加所有行（O(n) 且每行重算 runes），
+  /// 这里缓存前缀和数组：同一 charsPerLine/字号下重复跳转是 O(1)。
+  double _wrapOffsetOfLine(int lineIndex, int charsPerLine) {
+    final cached = _wrapRowOffsets;
+    if (cached != null &&
+        _wrapRowOffsetsCharsPerLine == charsPerLine &&
+        _wrapRowOffsetsFontSize == _fontSize &&
+        lineIndex < cached.length) {
+      return cached[lineIndex];
+    }
+    final rowHeight = _fontSize * _lineHeight + 4;
+    final offsets = List<double>.filled(_lines.length + 1, 0);
+    for (var i = 0; i < _lines.length; i++) {
+      final units = math.max(1, _visualUnits(_lines[i]));
+      final wrappedLines = (units / charsPerLine).ceil();
+      offsets[i + 1] = offsets[i] + wrappedLines * rowHeight;
+    }
+    _wrapRowOffsets = offsets;
+    _wrapRowOffsetsCharsPerLine = charsPerLine;
+    _wrapRowOffsetsFontSize = _fontSize;
+    if (lineIndex < offsets.length) return offsets[lineIndex];
+    return offsets.last;
   }
 
   @override
@@ -425,8 +480,13 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
                       : null,
                 ),
                 textInputAction: TextInputAction.next,
-                onChanged: (value) => _rebuildSearchMatches(value),
-                onSubmitted: (_) => _stepMatch(1),
+                onChanged: _scheduleSearch,
+                onSubmitted: (_) {
+                  // 回车立即结算待执行搜索，并跳到下一处（与旧行为一致）
+                  _searchDebounce?.cancel();
+                  _rebuildSearchMatches(_searchController.text);
+                  if (_matches.isNotEmpty) _stepMatch(1);
+                },
               ),
             ),
           ),
@@ -527,7 +587,7 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
   ) {
     final gutterW = _gutterWidth();
     final availableCodeWidth = math.max(80.0, constraints.maxWidth - gutterW);
-    final estimatedCodeWidth = _maxLineUnits * (_fontSize * 0.65) + 48.0;
+    final estimatedCodeWidth = _maxLineUnitsValue * (_fontSize * 0.65) + 48.0;
     final contentWidth = math.max(availableCodeWidth, estimatedCodeWidth);
     final rowHeight = _singleRowHeight;
     final codeBaseStyle = _codeTextStyle();
@@ -640,7 +700,7 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
       language: _language,
       palette: palette,
       baseStyle: baseStyle,
-      startsInBlockComment: _blockCommentMask[lineIndex],
+      startsInBlockComment: _commentMask[lineIndex],
       lineMatches: lineMatches,
       lineMatchStartIndex: firstMatchIdx,
       activeMatchGlobalIndex: _matches.isEmpty ? null : _activeMatchIndex,

@@ -18,6 +18,7 @@ class ToastUtils {
     String? message, {
     int duration = 2,
   }) {
+    if (!context.mounted) return;
     final text = message ?? '操作成功';
     final now = DateTime.now();
     final last = _lastShownAt;
@@ -49,7 +50,9 @@ class ToastUtils {
 
     final colors = context.appColors;
     final messenger = ScaffoldMessenger.of(context);
-    messenger.removeCurrentSnackBar();
+    // 用 hide 而非 remove：remove 会无过渡地掐断上一条提示，
+    // 若上一条带操作按钮（如「撤销」）会被直接吞掉，hide 则走正常退出动画。
+    messenger.hideCurrentSnackBar(reason: SnackBarClosedReason.hide);
     messenger.showSnackBar(
       SnackBar(
         width: width,

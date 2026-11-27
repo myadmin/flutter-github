@@ -137,6 +137,66 @@ void main() {
     ctrl.dispose();
   });
 
+  test('removeWhere 清空全部条目后不再显示「还有更多」', () async {
+    final ctrl = PagedListController<int>(
+      pageSize: 2,
+      loader: (page) async => PageResult<int>(
+        items: page == 1 ? [1, 2] : [3],
+        page: page,
+        hasMore: page == 1,
+      ),
+    );
+
+    await ctrl.refresh();
+    expect(ctrl.hasMore, isTrue);
+
+    // 全部移除后若 hasMore 仍为 true，底部会一直显示加载更多却永远拉不出数据
+    ctrl.removeWhere((item) => true);
+    expect(ctrl.items, isEmpty);
+    expect(ctrl.hasMore, isFalse);
+
+    // 未命中任何条目时不应触发通知（避免无意义重建）
+    var notifications = 0;
+    ctrl.addListener(() => notifications++);
+    ctrl.removeWhere((item) => true);
+    expect(notifications, 0);
+
+    ctrl.dispose();
+  });
+
+  test('StarSyncController 批量同步合并写入并按上限淘汰最旧条目', () {
+    final ctrl = StarSyncController();
+
+    ctrl.setSnapshots({
+      for (var i = 0; i < 30; i++)
+        'owner/repo-$i': RepoStarSnapshot(isStarred: true, starCount: i),
+    });
+    expect(ctrl.snapshotOf('owner/repo-0')?.starCount, 0);
+    expect(ctrl.snapshotOf('OWNER/REPO-29')?.starCount, 29, reason: '键需统一小写');
+    expect(ctrl.snapshotOf('owner/repo-29')?.isStarred, isTrue);
+
+    // 空 Map 与空名字直接忽略，不得污染已有快照
+    ctrl.setSnapshots(const {});
+    ctrl.setSnapshots({
+      '  ': const RepoStarSnapshot(isStarred: false, starCount: 0),
+    });
+    expect(ctrl.snapshotOf('owner/repo-0')?.starCount, 0);
+
+    // 负数 Star 计数统一归零，避免 UI 出现 -1
+    ctrl.setSnapshots({
+      'neg/repo': const RepoStarSnapshot(isStarred: true, starCount: -5),
+    });
+    expect(ctrl.snapshotOf('neg/repo')?.starCount, 0);
+
+    // 超出上限时淘汰最早写入的条目，避免常驻内存无界增长
+    ctrl.setSnapshots({
+      for (var i = 0; i < 900; i++)
+        'bulk/repo-$i': RepoStarSnapshot(isStarred: false, starCount: i),
+    });
+    expect(ctrl.snapshotOf('owner/repo-0'), isNull);
+    expect(ctrl.snapshotOf('bulk/repo-899')?.starCount, 899);
+  });
+
   test('PagedListController 刷新期间拒绝 loadMore，避免旧页与新查询混排', () async {
     final firstPage = Completer<void>();
     final requestedPages = <int>[];

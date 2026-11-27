@@ -91,7 +91,13 @@ class ThemeController extends GetxController {
     _loaded = true;
     themeMode.value = next;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(GlobalConstants.themeModeKey, serializeMode(next));
+    final ok = await prefs.setString(
+      GlobalConstants.themeModeKey,
+      serializeMode(next),
+    );
+    if (!ok) {
+      debugPrint('[ThemeController] 主题模式持久化失败，本次仅内存生效');
+    }
   }
 
   /// 恢复默认外观设置（跟随系统）

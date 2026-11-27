@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -245,12 +246,14 @@ class ExploreTagsController extends GetxController {
     final customSnapshot = List<String>.from(customTags);
     final showAllSnapshot = showAllTag.value;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(GlobalConstants.exploreTagsKey, tagsSnapshot);
-    await prefs.setBool(GlobalConstants.exploreShowAllTagKey, showAllSnapshot);
-    await prefs.setStringList(
-      GlobalConstants.exploreCustomTagsKey,
-      customSnapshot,
-    );
+    final results = await Future.wait<bool>([
+      prefs.setStringList(GlobalConstants.exploreTagsKey, tagsSnapshot),
+      prefs.setBool(GlobalConstants.exploreShowAllTagKey, showAllSnapshot),
+      prefs.setStringList(GlobalConstants.exploreCustomTagsKey, customSnapshot),
+    ]);
+    if (results.any((ok) => !ok)) {
+      debugPrint('[ExploreTagsController] 探索标签持久化失败，本次仅内存生效');
+    }
   }
 
   List<String> _dedupeTags(List<String> raw) {

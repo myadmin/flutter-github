@@ -162,59 +162,80 @@ class _RepoCommitDetailPageState extends State<RepoCommitDetailPage> {
         ),
         child: RefreshIndicator(
           onRefresh: _load,
-          child: ListView(
-            padding: const EdgeInsets.all(12),
-            children: [
-              _buildSummaryCard(detail, bodyMessage),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '变更文件 (${detail.files.length})',
-                      style: context.bodyStrongStyle,
+          // 用 CustomScrollView + SliverList 替代 ListView(children:)：
+          // 一次提交可能改动上百个文件，非懒加载会在首帧构建全部 diff 卡片。
+          child: CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                sliver: SliverList.list(
+                  children: [
+                    _buildSummaryCard(detail, bodyMessage),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '变更文件 (${detail.files.length})',
+                            style: context.bodyStrongStyle,
+                          ),
+                        ),
+                        if (detail.files.isNotEmpty)
+                          TextButton.icon(
+                            onPressed: () =>
+                                setState(() => _expandAll = !_expandAll),
+                            icon: Icon(
+                              _expandAll
+                                  ? Icons.unfold_less
+                                  : Icons.unfold_more,
+                              size: 16,
+                            ),
+                            label: Text(_expandAll ? '全部收起' : '全部展开'),
+                          ),
+                      ],
                     ),
-                  ),
-                  if (detail.files.isNotEmpty)
-                    TextButton.icon(
-                      onPressed: () => setState(() => _expandAll = !_expandAll),
-                      icon: Icon(
-                        _expandAll ? Icons.unfold_less : Icons.unfold_more,
-                        size: 16,
+                    const SizedBox(height: 6),
+                    if (detail.files.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: context.appColors.cardBackground,
+                          borderRadius: BorderRadius.circular(AppRadius.card),
+                        ),
+                        child: Center(
+                          child: Text('无文件改动明细', style: context.captionStyle),
+                        ),
                       ),
-                      label: Text(_expandAll ? '全部收起' : '全部展开'),
-                    ),
-                ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 6),
-              if (detail.files.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: context.appColors.cardBackground,
-                    borderRadius: BorderRadius.circular(AppRadius.card),
+              if (detail.files.isNotEmpty)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  sliver: SliverList.separated(
+                    itemCount: detail.files.length,
+                    itemBuilder: (context, index) {
+                      final file = detail.files[index];
+                      return GhDiffFileCard(
+                        // 用文件名做 key，避免列表变化时 State 被复用导致折叠/展开状态串台
+                        key: ValueKey<String>(file.filename),
+                        file: file,
+                        initiallyExpanded: _expandAll,
+                        onViewFile: () => Navigator.pushNamed(
+                          context,
+                          AppRoutes.repoFileView(
+                            widget.owner,
+                            widget.repoName,
+                            path: file.filename,
+                            ref: commit.sha,
+                          ),
+                        ),
+                      );
+                    },
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 10),
                   ),
-                  child: Center(
-                    child: Text('无文件改动明细', style: context.captionStyle),
-                  ),
-                )
-              else
-                for (final file in detail.files) ...[
-                  GhDiffFileCard(
-                    file: file,
-                    initiallyExpanded: _expandAll,
-                    onViewFile: () => Navigator.pushNamed(
-                      context,
-                      AppRoutes.repoFileView(
-                        widget.owner,
-                        widget.repoName,
-                        path: file.filename,
-                        ref: commit.sha,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                ],
+                ),
             ],
           ),
         ),

@@ -1068,6 +1068,8 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
       else
         for (final file in _prFiles) ...[
           GhDiffFileCard(
+            // 分页追加文件时保持 State 与文件名一一对应
+            key: ValueKey<String>(file.filename),
             file: file,
             initiallyExpanded: _prFiles.length <= 10,
             onViewFile: headRef.isEmpty

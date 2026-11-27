@@ -37,7 +37,13 @@ class SearchHistoryStore {
       ...current.where((item) => item.toLowerCase() != trimmed.toLowerCase()),
     ].take(maxItems).toList();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(GlobalConstants.searchHistoryKey, next);
+    final ok = await prefs.setStringList(
+      GlobalConstants.searchHistoryKey,
+      next,
+    );
+    if (!ok) {
+      debugPrint('[SearchHistoryStore] 搜索历史持久化失败，本次仅内存生效');
+    }
     return next;
   }
 
@@ -46,7 +52,13 @@ class SearchHistoryStore {
       final current = await load();
       final next = current.where((item) => item != keyword).toList();
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(GlobalConstants.searchHistoryKey, next);
+      final ok = await prefs.setStringList(
+        GlobalConstants.searchHistoryKey,
+        next,
+      );
+      if (!ok) {
+        debugPrint('[SearchHistoryStore] 删除搜索历史持久化失败');
+      }
       return next;
     });
   }

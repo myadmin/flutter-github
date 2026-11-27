@@ -1,5 +1,7 @@
 import 'dart:collection';
+import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:gh_explorer/constants/index.dart';
@@ -250,6 +252,27 @@ class DioRequest {
         }
         return ApiException('权限不足：$rawMsg', code: '403');
       }
+      if (statusCode == 422) {
+        // 422 的 message 恒为 "Validation Failed"，真正的原因在 errors[].message 里
+        final details = <String>[];
+        final errors = data['errors'];
+        if (errors is List) {
+          for (final item in errors) {
+            if (item is Map) {
+              final msg = item['message']?.toString() ?? '';
+              if (msg.isNotEmpty) details.add(msg);
+            }
+          }
+        }
+        final reason = details.isEmpty ? '请检查输入内容' : details.join('；');
+        return ApiException('请求参数不合法：$reason', code: '422');
+      }
+      if (statusCode == 429) {
+        return ApiException('操作过于频繁，请稍后再试', code: '429');
+      }
+      if (statusCode != null && statusCode >= 500) {
+        return NetworkException('GitHub 服务暂时不可用（$statusCode），请稍后重试');
+      }
       return ApiException(rawMsg, code: statusCode?.toString());
     }
 
@@ -275,16 +298,24 @@ class DioRequest {
     return null;
   }
 
-  String _etagCacheKey(String kind, String url, Map<String, dynamic>? params) {
+  /// 缓存键里的鉴权指纹：对 token 取 SHA-256 摘要前缀，
+  /// 既不会把明文 token 写进缓存键，也避免不同 token 撞键复用对方的私有数据。
+  String _authTag() {
     final token = authTokenReader?.call() ?? '';
-    final authTag = token.isEmpty
-        ? 'anon'
-        : '${token.length}:${token.hashCode}';
+    if (token.isEmpty) return 'anon';
+    return sha256.convert(utf8.encode(token)).toString().substring(0, 16);
+  }
+
+  String _etagCacheKey(String kind, String url, Map<String, dynamic>? params) {
+    final authTag = _authTag();
     if (params == null || params.isEmpty) {
       return '$authTag::$kind::$url';
     }
     final sortedKeys = params.keys.map((k) => k.toString()).toList()..sort();
-    final query = sortedKeys.map((k) => '$k=${params[k]}').join('&');
+    // 参数值必须转义：`q=a&b` 与 `q=a` + `b=` 之类的组合否则会拼出同一个键
+    final query = sortedKeys
+        .map((k) => '$k=${Uri.encodeQueryComponent('${params[k]}')}')
+        .join('&');
     return '$authTag::$kind::$url?$query';
   }
 
@@ -412,11 +443,13 @@ class DioRequest {
       return PagedResponse(data: cached.data, hasNextPage: cached.hasNextPage);
     }
     final linkHeader = res.headers.value('link');
-    final hasLinkNext = parseHasNextPage(linkHeader);
     final data = res.data;
+    // 以 GitHub 的 `Link` 头为准：列表接口有下一页时必定返回它。
+    // 无 Link 时只在「返回条数多于请求的每页条数」这种异常情况下才认为还有下一页，
+    // 避免早期 `data.length >= perPage` 的猜测在「最后一页刚好满页」时多请求一次空页。
     final hasNext = linkHeader != null
-        ? hasLinkNext
-        : (data is List && data.length >= perPage);
+        ? parseHasNextPage(linkHeader)
+        : (data is List && data.length > perPage);
     if (cacheable) {
       _writeEtagEntry(key, res.headers, data: data, hasNextPage: hasNext);
     }
@@ -492,6 +525,7 @@ class DioRequest {
         options: headers == null ? null : Options(headers: headers),
       ),
     );
+    _invalidateAfterWrite();
     return res.data;
   }
 
@@ -508,6 +542,7 @@ class DioRequest {
         options: headers == null ? null : Options(headers: headers),
       ),
     );
+    _invalidateAfterWrite();
     return res.data;
   }
 
@@ -524,13 +559,24 @@ class DioRequest {
         options: headers == null ? null : Options(headers: headers),
       ),
     );
+    _invalidateAfterWrite();
     return res.data;
   }
 
   /// 通用 DELETE 请求（取消 Star / Unfollow 等）
   Future<dynamic> delete(String url, {Object? data}) async {
     final res = await _execute(() => _dio.delete<dynamic>(url, data: data));
+    _invalidateAfterWrite();
     return res.data;
+  }
+
+  /// 写操作成功后作废 ETag 缓存。
+  ///
+  /// 写操作会改变服务端资源，若不失效缓存，后续 GET 仍带旧 `If-None-Match`，
+  /// GitHub 会回 304 让我们继续复用旧 body（典型现象：点 Star 后列表数字不变、
+  /// 标记已读后红点又亮起）。
+  void _invalidateAfterWrite() {
+    if (_etagCache.isNotEmpty) clearEtagCache();
   }
 
   /// 统一执行 Dio 请求并解包拦截器翻译后的异常对象

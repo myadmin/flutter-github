@@ -128,9 +128,14 @@ class NotificationItem {
     return parts.length >= 2 ? parts[1] : '';
   }
 
+  /// Issue / PR 编号与 Commit SHA 的解析正则提升为静态常量，
+  /// 避免通知列表每帧重建每个卡片时都重新编译正则
+  static final RegExp _issueOrPullPath = RegExp(r'/(?:issues|pulls)/(\d+)$');
+  static final RegExp _commitPath = RegExp(r'/commits/([0-9a-fA-F]+)$');
+
   /// 从 API URL 解析关联 Issue 或 PR 编号（如 `/issues/42` 或 `/pulls/12`）
   int? get subjectNumber {
-    final match = RegExp(r'/(?:issues|pulls)/(\d+)$').firstMatch(subjectUrl);
+    final match = _issueOrPullPath.firstMatch(subjectUrl);
     if (match == null) return null;
     final n = int.tryParse(match.group(1) ?? '');
     return (n != null && n > 0) ? n : null;
@@ -138,7 +143,7 @@ class NotificationItem {
 
   /// 从 API URL 解析关联 Commit SHA（如 `/commits/abc1234`）
   String get subjectCommitSha {
-    final match = RegExp(r'/commits/([0-9a-fA-F]+)$').firstMatch(subjectUrl);
+    final match = _commitPath.firstMatch(subjectUrl);
     return match?.group(1) ?? '';
   }
 

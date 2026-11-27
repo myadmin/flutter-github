@@ -109,7 +109,12 @@ class FootprintStore {
   static Future<void> _save(List<FootprintItem> items) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = jsonEncode(items.map((item) => item.toJson()).toList());
-    await prefs.setString(GlobalConstants.footprintKey, raw);
+    // SharedPreferences 写入可能因磁盘空间或平台通道异常失败；
+    // 此时内存已更新而磁盘未更新，至少留下日志便于排查「重启后足迹消失」。
+    final ok = await prefs.setString(GlobalConstants.footprintKey, raw);
+    if (!ok) {
+      debugPrint('[FootprintStore] 足迹持久化失败，本次仅内存生效');
+    }
     revision.value++;
   }
 }

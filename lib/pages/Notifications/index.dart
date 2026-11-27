@@ -48,7 +48,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
             final hasAnyUnread = res.items.any(
               (n) => n.unread && !_locallyReadIds.contains(n.id),
             );
-            NotificationBadgeStore.setUnread(hasAnyUnread);
+            // 仅看第 1 页会误清红点：该页可能恰好全部被本地标为已读，
+            // 而后续分页仍有未读。hasMore 为真时一律保留红点。
+            NotificationBadgeStore.setUnread(hasAnyUnread || res.hasMore);
           }
           return res;
         },

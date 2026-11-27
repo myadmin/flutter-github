@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/utils/auth_session.dart';
+import 'package:gh_explorer/utils/dio_request.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 敏感凭证的读写抽象，便于在单测中注入内存实现。
@@ -159,6 +160,9 @@ class TokenManager {
     } catch (error) {
       debugPrint('[TokenManager] 清除安全存储失败：$error');
     }
+    // 凭证变更后必须丢弃 ETag 条件缓存，否则下一次 GET 会带着旧
+    // `If-None-Match` 拿到 304，继续复用上一个登录态的响应体。
+    dioRequest.clearEtagCache();
     await _clearLegacyPrefs();
   }
 
