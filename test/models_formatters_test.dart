@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gh_explorer/components/Issue/gh_pr_review_section.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/models/event.dart';
 import 'package:gh_explorer/models/footprint.dart';
@@ -151,5 +152,49 @@ void main() {
     expect(AppColors.languageColor('Dart'), isNot(AppColors.textSecondary));
     expect(AppColors.languageColor('UnknownLang'), AppColors.textSecondary);
     expect(resolveErrorMessage(const FormatException('bad')), '数据格式异常，请稍后重试');
+  });
+
+  test('PR 审阅结论只保留每位审阅者最新的有效结论', () {
+    PullRequestReview review(String login, String state, String? at) =>
+        PullRequestReview(
+          id: 1,
+          state: state,
+          body: '',
+          user: RepoOwner.fromJson({'login': login, 'avatar_url': ''}),
+          submittedAt: at == null ? null : DateTime.parse(at),
+        );
+
+    // 同一人先 APPROVED 后 COMMENTED：结论仍是「已批准」
+    final latest = GhPrSummaryCard.latestDecisiveReviews([
+      review('alice', 'APPROVED', '2026-11-27T10:00:00Z'),
+      review('alice', 'COMMENTED', '2026-11-27T11:00:00Z'),
+    ]);
+    expect(latest, hasLength(1));
+    expect(latest.single.stateLabel, '已批准');
+
+    // 同一人后续改为 CHANGES_REQUESTED：以最新结论为准
+    final changed = GhPrSummaryCard.latestDecisiveReviews([
+      review('alice', 'APPROVED', '2026-11-27T10:00:00Z'),
+      review('alice', 'CHANGES_REQUESTED', '2026-11-27T12:00:00Z'),
+      review('alice', 'PENDING', '2026-11-27T13:00:00Z'),
+    ]);
+    expect(changed.single.stateLabel, '需修改');
+
+    // 乱序返回时按 submittedAt 取最新；DISMISSED 同样计入
+    final unordered = GhPrSummaryCard.latestDecisiveReviews([
+      review('bob', 'DISMISSED', '2026-11-27T09:00:00Z'),
+      review('bob', 'APPROVED', '2026-11-27T08:00:00Z'),
+    ]);
+    expect(unordered.single.stateLabel, '已驳回');
+
+    // 无 login 或只有 COMMENTED/PENDING 的条目不参与统计
+    expect(
+      GhPrSummaryCard.latestDecisiveReviews([
+        review('', 'APPROVED', '2026-11-27T10:00:00Z'),
+        review('carol', 'COMMENTED', '2026-11-27T10:00:00Z'),
+        review('dave', 'PENDING', null),
+      ]),
+      isEmpty,
+    );
   });
 }

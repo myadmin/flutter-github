@@ -384,6 +384,9 @@ Future<({bool merged, String message})> mergePullRequestAPI(
 }
 
 /// 获取 Pull Request 总体审阅结论列表
+///
+/// 取 `per_page: 100`（GitHub 单页上限）：审阅结论按人聚合，单个 PR 极少超过
+/// 100 条；若仍超限则只展示最近 100 条，避免多页串联带来的额外配额消耗。
 Future<List<PullRequestReview>> getPullRequestReviewsAPI(
   String owner,
   String repo,
@@ -392,13 +395,15 @@ Future<List<PullRequestReview>> getPullRequestReviewsAPI(
 }) async {
   final data = await dioRequest.get(
     '${_pullsBase(owner, repo)}/$number/reviews',
-    params: {'per_page': 30},
+    params: {'per_page': 100},
     cancelToken: cancelToken,
   );
   return asModelList(data, PullRequestReview.fromJson);
 }
 
 /// 获取 Pull Request 行内代码评审评论列表
+///
+/// 与审阅结论一致取 `per_page: 100`，减少大型 PR 上行内批注被截断的概率。
 Future<List<PullRequestReviewComment>> getPullRequestReviewCommentsAPI(
   String owner,
   String repo,
@@ -407,7 +412,7 @@ Future<List<PullRequestReviewComment>> getPullRequestReviewCommentsAPI(
 }) async {
   final data = await dioRequest.get(
     '${_pullsBase(owner, repo)}/$number/comments',
-    params: {'per_page': 50},
+    params: {'per_page': 100},
     cancelToken: cancelToken,
   );
   return asModelList(data, PullRequestReviewComment.fromJson);
