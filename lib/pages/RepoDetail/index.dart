@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -52,7 +53,12 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
 
   /// 分支切换 / 整页刷新的请求代际，用于丢弃过期分支的 README 响应
   int _branchSeq = 0;
+  CancelToken? _loadToken;
+  CancelToken? _readmeToken;
   bool _isStarred = false;
+  bool _isSubscribed = false;
+  bool _watchPending = false;
+  bool _forkPending = false;
   bool _isLoading = true;
   String _errorMessage = '';
 
@@ -81,20 +87,41 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
 
   @override
   void dispose() {
+    _loadToken?.cancel();
+    _readmeToken?.cancel();
     _userWatcher.dispose();
     super.dispose();
   }
 
-  /// 登录态变化时仅增量刷新当前仓库的 Star 状态
+  /// 登录态变化时仅增量刷新当前仓库的 Star 与订阅状态
   Future<void> _refreshStarStateOnly() async {
     if (!_userController.isLoggedIn) {
-      if (mounted) setState(() => _isStarred = false);
+      if (mounted) {
+        setState(() {
+          _isStarred = false;
+          _isSubscribed = false;
+        });
+      }
       return;
     }
     try {
-      final starred = await checkRepoStarredAPI(widget.owner, widget.repoName);
+      final (starred, subscribed) = await (
+        checkRepoStarredAPI(
+          widget.owner,
+          widget.repoName,
+          cancelToken: _loadToken,
+        ).catchError((Object _) => false),
+        checkRepoSubscribedAPI(
+          widget.owner,
+          widget.repoName,
+          cancelToken: _loadToken,
+        ).catchError((Object _) => false),
+      ).wait;
       if (!mounted) return;
-      setState(() => _isStarred = starred);
+      setState(() {
+        _isStarred = starred;
+        _isSubscribed = subscribed;
+      });
       final repo = _repo;
       if (repo != null) {
         _starSync.setSnapshot(
@@ -106,40 +133,59 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
     } catch (_) {}
   }
 
-  /// 并发拉取仓库元数据、README 与 Star 状态，并在成功后写入本地足迹
+  /// 并发拉取仓库元数据、README 与 Star/订阅状态，并在成功后写入本地足迹
   Future<void> _load() async {
     if (!mounted) return;
-    // 整页刷新同样推进代际，保证在途的分支切换响应不会覆盖最新结果
+    // 整页刷新同样推进代际并取消旧在途请求，保证过期响应不覆盖最新结果
     final seq = ++_branchSeq;
+    _loadToken?.cancel();
+    _readmeToken?.cancel();
+    final loadToken = CancelToken();
+    _loadToken = loadToken;
     setState(() {
       _isLoading = _repo == null;
       _errorMessage = '';
     });
 
     try {
-      final detailFuture = getRepoDetailAPI(widget.owner, widget.repoName);
-      // README、Star 与分支列表失败不影响仓库主信息展示
+      final detailFuture = getRepoDetailAPI(
+        widget.owner,
+        widget.repoName,
+        cancelToken: loadToken,
+      );
+      // README、Star、订阅与分支列表失败不影响仓库主信息展示
       final readmeFuture = getRepoReadmeRawAPI(
         widget.owner,
         widget.repoName,
         ref: _selectedBranch,
+        cancelToken: loadToken,
       ).catchError((Object _) => '');
       final starFuture = _userController.isLoggedIn
           ? checkRepoStarredAPI(
               widget.owner,
               widget.repoName,
+              cancelToken: loadToken,
+            ).catchError((Object _) => false)
+          : Future<bool>.value(false);
+      final subscribeFuture = _userController.isLoggedIn
+          ? checkRepoSubscribedAPI(
+              widget.owner,
+              widget.repoName,
+              cancelToken: loadToken,
             ).catchError((Object _) => false)
           : Future<bool>.value(false);
       final branchesFuture = getAllRepoBranchesAPI(
         widget.owner,
         widget.repoName,
         maxPages: 1,
+        cancelToken: loadToken,
       ).catchError((Object _) => const <RepoBranch>[]);
 
-      final (repo, readme, starred, branches) = await (
+      final (repo, readme, starred, subscribed, branches) = await (
         detailFuture,
         readmeFuture,
         starFuture,
+        subscribeFuture,
         branchesFuture,
       ).wait;
 
@@ -159,10 +205,13 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
           _selectedBranch = repo.defaultBranch;
         }
         _isStarred = starred;
+        _isSubscribed = subscribed;
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted || seq != _branchSeq) return;
+      if (e is RequestCancelledException || !mounted || seq != _branchSeq) {
+        return;
+      }
       setState(() {
         _isLoading = false;
         _errorMessage = resolveErrorMessage(e, fallback: '仓库信息加载失败');
@@ -174,6 +223,9 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
   Future<void> _switchBranch(String branch) async {
     if (branch == _effectiveBranch) return;
     final seq = ++_branchSeq;
+    _readmeToken?.cancel();
+    final token = CancelToken();
+    _readmeToken = token;
     setState(() {
       _selectedBranch = branch;
       _readmeLoading = true;
@@ -183,6 +235,7 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
         widget.owner,
         widget.repoName,
         ref: branch,
+        cancelToken: token,
       ).catchError((Object _) => '');
       // 快速连续切换分支时，只接受最后一次切换的响应
       if (!mounted || seq != _branchSeq) return;
@@ -190,10 +243,89 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
         _readme = readme;
         _readmeLoading = false;
       });
-    } catch (_) {
+    } catch (e) {
+      if (e is RequestCancelledException) return;
       if (mounted && seq == _branchSeq) {
         setState(() => _readmeLoading = false);
       }
+    }
+  }
+
+  /// 切换 Watch 订阅状态（未登录引导登录并自动续做）
+  Future<void> _toggleWatch() async {
+    if (_watchPending || _repo == null) return;
+    if (!_userController.isLoggedIn) {
+      ToastUtils.showToast(context, '登录后即可订阅仓库动态');
+      await Navigator.pushNamed(context, AppRoutes.login);
+      if (!mounted || !_userController.isLoggedIn) return;
+    }
+    final nextSubscribed = !_isSubscribed;
+    setState(() {
+      _watchPending = true;
+      _isSubscribed = nextSubscribed;
+    });
+    try {
+      if (nextSubscribed) {
+        await watchRepoAPI(widget.owner, widget.repoName);
+      } else {
+        await unwatchRepoAPI(widget.owner, widget.repoName);
+      }
+      if (!mounted) return;
+      ToastUtils.showToast(context, nextSubscribed ? '已订阅仓库通知' : '已取消订阅');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubscribed = !nextSubscribed);
+      ToastUtils.showToast(context, resolveErrorMessage(e, fallback: '订阅操作失败'));
+    } finally {
+      if (mounted) setState(() => _watchPending = false);
+    }
+  }
+
+  /// 二次确认后 Fork 当前仓库并提示跳往新生成的副本仓库
+  Future<void> _confirmAndFork() async {
+    if (_forkPending || _repo == null) return;
+    if (!_userController.isLoggedIn) {
+      ToastUtils.showToast(context, '登录后即可 Fork 仓库');
+      await Navigator.pushNamed(context, AppRoutes.login);
+      if (!mounted || !_userController.isLoggedIn) return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Fork 仓库'),
+        content: Text('确定将 ${widget.owner}/${widget.repoName} Fork 到你的账号下吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('确认 Fork'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _forkPending = true);
+    try {
+      final forked = await forkRepoAPI(widget.owner, widget.repoName);
+      if (!mounted) return;
+      ToastUtils.showToast(context, 'Fork 请求已提交');
+      if (forked.ownerLogin.isNotEmpty && forked.repoName.isNotEmpty) {
+        await Navigator.pushNamed(
+          context,
+          AppRoutes.repoDetail(forked.ownerLogin, forked.repoName),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ToastUtils.showToast(
+        context,
+        resolveErrorMessage(e, fallback: 'Fork 失败'),
+      );
+    } finally {
+      if (mounted) setState(() => _forkPending = false);
     }
   }
 
@@ -437,20 +569,27 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
               runSpacing: 6,
               children: [
                 for (final topic in repo.topics.take(10))
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: context.appColors.primarySurface,
+                  Material(
+                    color: context.appColors.primarySurface,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    child: InkWell(
+                      onTap: () => Navigator.pushNamed(
+                        context,
+                        AppRoutes.search('topic:$topic'),
+                      ),
                       borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
-                    child: Text(
-                      topic,
-                      style: context.captionSmallStyle.copyWith(
-                        color: context.appColors.primary,
-                        fontWeight: FontWeight.w500,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        child: Text(
+                          topic,
+                          style: context.captionSmallStyle.copyWith(
+                            color: context.appColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -465,9 +604,26 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
             children: [
               if (repo.language.isNotEmpty)
                 GhLanguageDot(language: repo.language),
-              _MetricText(
-                icon: Icons.call_split,
-                label: 'Fork ${formatCompactNumber(repo.forksCount)}',
+              InkWell(
+                onTap: () => Navigator.pushNamed(
+                  context,
+                  AppRoutes.repoCommunity(
+                    repo.ownerLogin,
+                    repo.repoName,
+                    tab: 'forks',
+                  ),
+                ),
+                borderRadius: BorderRadius.circular(AppRadius.small),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
+                  child: _MetricText(
+                    icon: Icons.call_split,
+                    label: 'Fork ${formatCompactNumber(repo.forksCount)}',
+                  ),
+                ),
               ),
               _MetricText(
                 icon: Icons.visibility_outlined,
@@ -481,7 +637,10 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
             ],
           ),
           const SizedBox(height: 14),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               GhStarButton(
                 owner: repo.ownerLogin,
@@ -492,25 +651,61 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
                   if (mounted) setState(() => _isStarred = starred);
                 },
               ),
-              if (repo.homepage.isNotEmpty) ...[
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _openInBrowser(repo.homepage),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: context.appColors.textPrimary,
-                      side: BorderSide(color: context.appColors.divider),
-                      shape: const StadiumBorder(),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                    ),
-                    icon: const Icon(Icons.link, size: 16),
-                    label: const Text('项目主页', maxLines: 1),
+              OutlinedButton.icon(
+                onPressed: _watchPending ? null : _toggleWatch,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _isSubscribed
+                      ? context.appColors.primary
+                      : context.appColors.textPrimary,
+                  backgroundColor: _isSubscribed
+                      ? context.appColors.primarySurface
+                      : null,
+                  side: BorderSide(
+                    color: _isSubscribed
+                        ? context.appColors.primary
+                        : context.appColors.divider,
+                  ),
+                  shape: const StadiumBorder(),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
                   ),
                 ),
-              ],
+                icon: Icon(
+                  _isSubscribed ? Icons.visibility : Icons.visibility_outlined,
+                  size: 16,
+                ),
+                label: Text(_isSubscribed ? '已订阅' : 'Watch'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _forkPending ? null : _confirmAndFork,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: context.appColors.textPrimary,
+                  side: BorderSide(color: context.appColors.divider),
+                  shape: const StadiumBorder(),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
+                ),
+                icon: const Icon(Icons.call_split, size: 16),
+                label: const Text('Fork'),
+              ),
+              if (repo.homepage.isNotEmpty)
+                OutlinedButton.icon(
+                  onPressed: () => _openInBrowser(repo.homepage),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: context.appColors.textPrimary,
+                    side: BorderSide(color: context.appColors.divider),
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 9,
+                    ),
+                  ),
+                  icon: const Icon(Icons.link, size: 16),
+                  label: const Text('主页', maxLines: 1),
+                ),
             ],
           ),
         ],

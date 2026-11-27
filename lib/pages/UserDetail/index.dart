@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:gh_explorer/api/star.dart';
@@ -40,6 +41,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
   bool _isLoading = true;
   String _errorMessage = '';
   int _tabIndex = 0;
+  CancelToken? _profileToken;
 
   late final PagedListController<RepoItem> _reposList =
       PagedListController<RepoItem>(
@@ -88,6 +90,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
 
   @override
   void dispose() {
+    _profileToken?.cancel();
     _scrollController.dispose();
     _reposList.dispose();
     _starsList.dispose();
@@ -108,14 +111,20 @@ class _UserDetailPageState extends State<UserDetailPage> {
 
   /// 并发拉取用户资料与关注状态（本人主页与未登录跳过关注检查）
   Future<void> _loadProfile() async {
+    _profileToken?.cancel();
+    final token = CancelToken();
+    _profileToken = token;
     setState(() {
       _isLoading = _profile == null;
       _errorMessage = '';
     });
     try {
-      final profileFuture = getUserDetailAPI(widget.login);
+      final profileFuture = getUserDetailAPI(widget.login, cancelToken: token);
       final followFuture = _userController.isLoggedIn && !_isSelf
-          ? checkFollowingUserAPI(widget.login).catchError((Object _) => false)
+          ? checkFollowingUserAPI(
+              widget.login,
+              cancelToken: token,
+            ).catchError((Object _) => false)
           : Future<bool>.value(false);
 
       final (profile, following) = await (profileFuture, followFuture).wait;
@@ -126,7 +135,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (e is RequestCancelledException || !mounted) return;
       setState(() {
         _isLoading = false;
         _errorMessage = resolveErrorMessage(e, fallback: '用户信息加载失败');

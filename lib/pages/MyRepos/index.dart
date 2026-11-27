@@ -6,6 +6,7 @@ import 'package:gh_explorer/components/common/gh_repo_card.dart';
 import 'package:gh_explorer/components/common/hm_bottom_bar.dart';
 import 'package:gh_explorer/components/common/hm_empty_view.dart';
 import 'package:gh_explorer/components/common/hm_list_footer.dart';
+import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/repo.dart';
@@ -27,6 +28,8 @@ class _MyReposPageState extends State<MyReposPage> {
   final ScrollController _scrollController = ScrollController();
 
   String _visibility = 'all';
+  String _affiliation = 'owner,collaborator,organization_member';
+  String _sort = 'updated';
   late final Worker _userWatcher;
 
   late final PagedListController<RepoItem> _list =
@@ -34,7 +37,9 @@ class _MyReposPageState extends State<MyReposPage> {
         pageSize: GlobalConstants.defaultPageSize,
         loader: (page) => getMyReposAPI(
           page: page,
+          affiliation: _affiliation,
           visibility: _visibility,
+          sort: _sort,
           cancelToken: _list.cancelToken,
         ),
         firstPageErrorFallback: '加载仓库列表失败',
@@ -85,6 +90,19 @@ class _MyReposPageState extends State<MyReposPage> {
     _list.refresh();
   }
 
+  /// 切换仓库归属筛选或排序维度并刷新列表
+  void _switchMetaFilter({String? affiliation, String? sort}) {
+    final nextAff = affiliation ?? _affiliation;
+    final nextSort = sort ?? _sort;
+    if (nextAff == _affiliation && nextSort == _sort) return;
+    setState(() {
+      _affiliation = nextAff;
+      _sort = nextSort;
+    });
+    _list.clear();
+    _list.refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -129,19 +147,98 @@ class _MyReposPageState extends State<MyReposPage> {
 
   Widget _buildFilterBar() {
     const options = [('all', '全部'), ('public', '公开'), ('private', '私有')];
+    const sortLabels = {
+      'updated': '最近更新',
+      'created': '最新创建',
+      'full_name': '名称排序',
+    };
+    const affLabels = {
+      'owner,collaborator,organization_member': '所有归属',
+      'owner': '我创建的',
+      'collaborator': '我协作的',
+    };
     return Container(
       width: double.infinity,
       color: context.appColors.cardBackground,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Wrap(
-        spacing: 8,
+      child: Row(
         children: [
-          for (final (value, label) in options)
-            ChoiceChip(
-              label: Text(label),
-              selected: _visibility == value,
-              onSelected: (_) => _switchVisibility(value),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final (value, label) in options) ...[
+                    ChoiceChip(
+                      label: Text(label),
+                      selected: _visibility == value,
+                      onSelected: (_) => _switchVisibility(value),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ],
+              ),
             ),
+          ),
+          PopupMenuButton<String>(
+            initialValue: _affiliation,
+            tooltip: '归属筛选',
+            onSelected: (v) => _switchMetaFilter(affiliation: v),
+            itemBuilder: (context) => [
+              for (final entry in affLabels.entries)
+                PopupMenuItem<String>(
+                  value: entry.key,
+                  child: Text(entry.value),
+                ),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    affLabels[_affiliation] ?? '所有归属',
+                    style: context.captionStyle,
+                  ),
+                  Icon(
+                    Icons.arrow_drop_down,
+                    size: 16,
+                    color: context.appColors.textSecondary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          PopupMenuButton<String>(
+            initialValue: _sort,
+            tooltip: '排序方式',
+            onSelected: (v) => _switchMetaFilter(sort: v),
+            itemBuilder: (context) => [
+              for (final entry in sortLabels.entries)
+                PopupMenuItem<String>(
+                  value: entry.key,
+                  child: Text(entry.value),
+                ),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.sort,
+                    size: 15,
+                    color: context.appColors.textSecondary,
+                  ),
+                  const SizedBox(width: 2),
+                  Text(
+                    sortLabels[_sort] ?? '最近更新',
+                    style: context.captionStyle,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

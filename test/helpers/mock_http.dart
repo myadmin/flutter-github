@@ -9,6 +9,7 @@ import 'package:gh_explorer/routes/app_routes.dart';
 import 'package:gh_explorer/routes/index.dart';
 import 'package:gh_explorer/stores/explore_tags_controller.dart';
 import 'package:gh_explorer/stores/footprint_store.dart';
+import 'package:gh_explorer/stores/notification_badge_store.dart';
 import 'package:gh_explorer/stores/rate_limit_controller.dart';
 import 'package:gh_explorer/stores/search_history_store.dart';
 import 'package:gh_explorer/stores/star_sync_controller.dart';
@@ -151,6 +152,8 @@ MockAdapter installAuthMock(
 })
 registerTestControllers() {
   Get.reset();
+  dioRequest.clearEtagCache();
+  NotificationBadgeStore.clear();
   ExploreShowcaseCache.clear();
   FootprintStore.resetForTest();
   SearchHistoryStore.resetForTest();

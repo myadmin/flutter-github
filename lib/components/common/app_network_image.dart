@@ -1,7 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 
-/// 统一网络图片与头像组件，封装占位、失败兜底与按需解码尺寸
+/// 判断图片地址是否为 SVG 矢量图或常见动态徽章（Image.network 不支持直接解码）
+bool isSvgImageUrl(String url) {
+  final lower = url.trim().toLowerCase();
+  if (lower.isEmpty) return false;
+  return lower.endsWith('.svg') ||
+      lower.contains('.svg?') ||
+      lower.contains('img.shields.io') ||
+      lower.contains('shields.io/badge') ||
+      lower.contains('badgen.net') ||
+      lower.contains('badge.fury.io') ||
+      RegExp(r'/workflows/[^/]+/badge').hasMatch(lower);
+}
+
+/// 统一网络图片与头像组件，封装占位、SVG 徽章兼容、失败兜底与按需解码尺寸
 class AppNetworkImage extends StatelessWidget {
   const AppNetworkImage({
     super.key,
@@ -30,7 +43,7 @@ class AppNetworkImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final trimmed = url.trim();
     Widget child;
-    if (trimmed.isEmpty) {
+    if (trimmed.isEmpty || isSvgImageUrl(trimmed)) {
       child = _buildPlaceholder(context, showIcon: true);
     } else {
       final double? logicalWidth = decodeWidth ?? width;
@@ -43,6 +56,8 @@ class AppNetworkImage extends StatelessWidget {
         height: height,
         fit: fit,
         cacheWidth: cacheWidth,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
         semanticLabel: semanticLabel,
         loadingBuilder: (context, imageChild, progress) {
           if (progress == null) return imageChild;

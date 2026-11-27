@@ -11,7 +11,7 @@ class FootprintStore {
 
   static const int maxItems = 50;
 
-  /// 足迹版本号：写入 / 清空后自增，Explore 等常驻页面据此刷新“继续浏览”
+  /// 足迹版本号：写入 / 移除 / 清空后自增，Explore 等常驻页面据此刷新“继续浏览”
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
   static Future<List<FootprintItem>> load() async {
@@ -48,14 +48,9 @@ class FootprintStore {
   /// 读-改-写并发会互相覆盖导致记录丢失。
   static Future<void>? _writeQueue;
 
-  static Future<List<FootprintItem>> record(FootprintItem item) {
-    if (item.owner.isEmpty || item.name.isEmpty) {
-      return load();
-    }
+  static Future<T> _serialized<T>(Future<T> Function() task) {
     final prev = _writeQueue;
-    final result = prev == null
-        ? _recordInternal(item)
-        : prev.then((_) => _recordInternal(item));
+    final result = prev == null ? task() : prev.then((_) => task());
     final marker = result.then<void>((_) {}, onError: (Object _) {});
     _writeQueue = marker;
     marker.whenComplete(() {
@@ -64,6 +59,31 @@ class FootprintStore {
       }
     });
     return result;
+  }
+
+  static Future<List<FootprintItem>> record(FootprintItem item) {
+    if (item.owner.isEmpty || item.name.isEmpty) {
+      return load();
+    }
+    return _serialized(() => _recordInternal(item));
+  }
+
+  /// 删除单条本地足迹并通知监听页同步刷新
+  static Future<List<FootprintItem>> remove(String fullName) {
+    final target = fullName.trim().toLowerCase();
+    if (target.isEmpty) return load();
+    return _serialized(() => _removeInternal(target));
+  }
+
+  static Future<List<FootprintItem>> _removeInternal(
+    String lowerFullName,
+  ) async {
+    final items = await load();
+    final next = items
+        .where((item) => item.fullName.toLowerCase() != lowerFullName)
+        .toList();
+    await _save(next);
+    return next;
   }
 
   static Future<List<FootprintItem>> _recordInternal(FootprintItem item) async {

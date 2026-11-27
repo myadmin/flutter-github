@@ -18,6 +18,7 @@ import 'package:gh_explorer/pages/RepoIssueDetail/index.dart';
 import 'package:gh_explorer/pages/RepoIssues/index.dart';
 import 'package:gh_explorer/pages/RepoPeople/index.dart';
 import 'package:gh_explorer/pages/RepoReleases/index.dart';
+import 'package:gh_explorer/pages/Search/index.dart';
 import 'package:gh_explorer/pages/Settings/index.dart';
 import 'package:gh_explorer/pages/Unknown/index.dart';
 import 'package:gh_explorer/pages/UserDetail/index.dart';
@@ -325,6 +326,10 @@ Map<String, Widget Function(BuildContext)> getRootRoutes() {
     },
     AppRoutes.myReposPath: (_) => const MyReposPage(),
     AppRoutes.myStarsPath: (_) => const MyStarsPage(),
+    AppRoutes.searchPath: (context) {
+      final p = _readParams(context);
+      return SearchPage(initialQuery: p['q'] ?? '');
+    },
     AppRoutes.notificationsPath: (_) => const NotificationsPage(),
     AppRoutes.footprintPath: (_) => const FootprintPage(),
     AppRoutes.settingsPath: (_) => const SettingsPage(),

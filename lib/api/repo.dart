@@ -12,8 +12,15 @@ String _repoBase(String owner, String repo) =>
     '${HttpConstants.repos}/${Uri.encodeComponent(owner.trim())}/${Uri.encodeComponent(repo.trim())}';
 
 /// 获取仓库详细信息
-Future<RepoItem> getRepoDetailAPI(String owner, String repo) async {
-  final data = await dioRequest.get(_repoBase(owner, repo));
+Future<RepoItem> getRepoDetailAPI(
+  String owner,
+  String repo, {
+  CancelToken? cancelToken,
+}) async {
+  final data = await dioRequest.get(
+    _repoBase(owner, repo),
+    cancelToken: cancelToken,
+  );
   return RepoItem.fromJson(asMap(data));
 }
 
@@ -22,11 +29,13 @@ Future<String> getRepoReadmeRawAPI(
   String owner,
   String repo, {
   String ref = '',
+  CancelToken? cancelToken,
 }) async {
   try {
     return await dioRequest.getRaw(
       '${_repoBase(owner, repo)}/readme',
       params: ref.isEmpty ? null : {'ref': ref},
+      cancelToken: cancelToken,
     );
   } on ApiException catch (e) {
     // 仓库未包含 README 时 GitHub 返回 404，按空内容降级处理
@@ -41,6 +50,7 @@ Future<List<RepoContentItem>> getRepoContentsAPI(
   String repo, {
   String path = '',
   String ref = '',
+  CancelToken? cancelToken,
 }) async {
   // 对路径按段编码，保留目录分隔符 `/`
   final cleanPath = path
@@ -54,6 +64,7 @@ Future<List<RepoContentItem>> getRepoContentsAPI(
   final data = await dioRequest.get(
     url,
     params: ref.isEmpty ? null : {'ref': ref},
+    cancelToken: cancelToken,
   );
   final items = asModelList(data, RepoContentItem.fromJson);
   items.sort((a, b) {
@@ -71,6 +82,7 @@ Future<String> getRepoFileRawAPI(
   String repo, {
   required String path,
   String ref = '',
+  CancelToken? cancelToken,
 }) async {
   final cleanPath = path
       .split('/')
@@ -80,6 +92,7 @@ Future<String> getRepoFileRawAPI(
   return dioRequest.getRaw(
     '${_repoBase(owner, repo)}/contents/$cleanPath',
     params: ref.isEmpty ? null : {'ref': ref},
+    cancelToken: cancelToken,
   );
 }
 
@@ -227,6 +240,44 @@ Future<PageResult<RepoItem>> getRepoForksAPI(
     page: page,
     hasMore: res.hasNextPage,
   );
+}
+
+/// 检查当前登录用户是否已订阅（Watch）指定仓库
+Future<bool> checkRepoSubscribedAPI(
+  String owner,
+  String repo, {
+  CancelToken? cancelToken,
+}) async {
+  try {
+    final data = await dioRequest.get(
+      '${_repoBase(owner, repo)}/subscription',
+      cancelToken: cancelToken,
+      useEtagCache: false,
+    );
+    return asBool(asMap(data)['subscribed']);
+  } on ApiException catch (e) {
+    if (e.code == '404') return false;
+    rethrow;
+  }
+}
+
+/// 订阅（Watch）指定仓库动态
+Future<void> watchRepoAPI(String owner, String repo) async {
+  await dioRequest.put(
+    '${_repoBase(owner, repo)}/subscription',
+    data: {'subscribed': true, 'ignored': false},
+  );
+}
+
+/// 取消订阅（Unwatch）指定仓库
+Future<void> unwatchRepoAPI(String owner, String repo) async {
+  await dioRequest.delete('${_repoBase(owner, repo)}/subscription');
+}
+
+/// Fork 指定仓库到当前登录用户账号下
+Future<RepoItem> forkRepoAPI(String owner, String repo) async {
+  final data = await dioRequest.post('${_repoBase(owner, repo)}/forks');
+  return RepoItem.fromJson(asMap(data));
 }
 
 /// 分页获取仓库贡献者列表（含提交次数）

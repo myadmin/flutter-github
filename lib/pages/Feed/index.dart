@@ -1,3 +1,6 @@
+import 'dart:async' show unawaited;
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:gh_explorer/api/feed.dart';
@@ -11,6 +14,7 @@ import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/event.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
+import 'package:gh_explorer/stores/notification_badge_store.dart';
 import 'package:gh_explorer/stores/user_controller.dart';
 import 'package:gh_explorer/utils/formatters.dart';
 import 'package:gh_explorer/utils/paged_list.dart';
@@ -29,6 +33,7 @@ class _FeedViewState extends State<FeedView> {
   final ScrollController _scrollController = ScrollController();
 
   late final Worker _userWatcher;
+  CancelToken? _badgeToken;
 
   late final PagedListController<GithubEvent> _list =
       PagedListController<GithubEvent>(
@@ -52,21 +57,33 @@ class _FeedViewState extends State<FeedView> {
       if (!mounted) return;
       if (_userController.isLoggedIn) {
         _list.refresh();
+        _refreshUnreadBadge();
       } else {
         _list.clear();
+        NotificationBadgeStore.clear();
       }
     });
     if (_userController.isLoggedIn) {
       _list.refresh();
+      _refreshUnreadBadge();
     }
   }
 
   @override
   void dispose() {
+    _badgeToken?.cancel();
     _userWatcher.dispose();
     _scrollController.dispose();
     _list.dispose();
     super.dispose();
+  }
+
+  void _refreshUnreadBadge() {
+    if (!_userController.isLoggedIn) return;
+    _badgeToken?.cancel();
+    final token = CancelToken();
+    _badgeToken = token;
+    unawaited(NotificationBadgeStore.refresh(cancelToken: token));
   }
 
   void _onScroll() {
@@ -125,15 +142,39 @@ class _FeedViewState extends State<FeedView> {
           Text('关注动态', style: context.sectionTitleStyle),
           const Spacer(),
           IconButton(
-            onPressed: () {
+            onPressed: () async {
               if (!_userController.isLoggedIn) {
                 ToastUtils.showToast(context, '登录后查看消息通知');
-                Navigator.pushNamed(context, AppRoutes.login);
-                return;
+                await Navigator.pushNamed(context, AppRoutes.login);
+                if (!mounted || !_userController.isLoggedIn) return;
               }
-              Navigator.pushNamed(context, AppRoutes.notificationsPath);
+              await Navigator.pushNamed(context, AppRoutes.notificationsPath);
+              if (mounted) _refreshUnreadBadge();
             },
-            icon: const Icon(Icons.notifications_none),
+            icon: ValueListenableBuilder<bool>(
+              valueListenable: NotificationBadgeStore.hasUnread,
+              builder: (context, hasUnread, _) {
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(Icons.notifications_none),
+                    if (hasUnread)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: context.appColors.badge,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
             tooltip: '消息通知',
           ),
         ],
@@ -158,7 +199,10 @@ class _FeedViewState extends State<FeedView> {
       );
     }
     return RefreshIndicator(
-      onRefresh: _list.refresh,
+      onRefresh: () async {
+        _refreshUnreadBadge();
+        await _list.refresh();
+      },
       child: ListView.separated(
         controller: _scrollController,
         padding: const EdgeInsets.all(12),

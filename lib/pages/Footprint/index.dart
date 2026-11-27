@@ -20,13 +20,21 @@ class FootprintPage extends StatefulWidget {
 }
 
 class _FootprintPageState extends State<FootprintPage> {
+  final TextEditingController _filterController = TextEditingController();
   List<FootprintItem> _items = const [];
+  String _keyword = '';
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _filterController.dispose();
+    super.dispose();
   }
 
   /// 从本地加载浏览足迹列表
@@ -65,6 +73,14 @@ class _FootprintPageState extends State<FootprintPage> {
     if (!mounted) return;
     setState(() => _items = const []);
     ToastUtils.showToast(context, '已清空足迹');
+  }
+
+  /// 删除单条本地足迹
+  Future<void> _removeItem(FootprintItem item) async {
+    final updated = await FootprintStore.remove(item.fullName);
+    if (!mounted) return;
+    setState(() => _items = updated);
+    ToastUtils.showToast(context, '已移除 ${item.fullName}');
   }
 
   /// 跳转项目详情，返回后刷新本地足迹排序与浏览时间
@@ -127,42 +143,120 @@ class _FootprintPageState extends State<FootprintPage> {
         ),
       );
     }
-    final groups = groupFootprints(_items);
+    final query = _keyword.trim().toLowerCase();
+    final filtered = query.isEmpty
+        ? _items
+        : _items
+              .where(
+                (item) =>
+                    item.fullName.toLowerCase().contains(query) ||
+                    item.description.toLowerCase().contains(query) ||
+                    item.language.toLowerCase().contains(query),
+              )
+              .toList();
+    final groups = groupFootprints(filtered);
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(
           maxWidth: HmBottomBar.maxContentWidth,
         ),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+        child: Column(
           children: [
-            for (final group in groups) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(2, 6, 2, 8),
-                child: Text(
-                  group.title,
-                  style: context.captionStyle.copyWith(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+            Container(
+              color: context.appColors.cardBackground,
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              child: TextField(
+                controller: _filterController,
+                onChanged: (value) => setState(() => _keyword = value),
+                decoration: InputDecoration(
+                  hintText: '筛选历史仓库名称、简介或语言...',
+                  hintStyle: context.captionStyle,
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  suffixIcon: _keyword.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 16),
+                          onPressed: () {
+                            _filterController.clear();
+                            setState(() => _keyword = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: context.appColors.inputFill,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    borderSide: BorderSide.none,
                   ),
                 ),
               ),
-              for (final item in group.items) ...[
-                _FootprintTile(
-                  item: item,
-                  timeText: _formatHourMinute(item.viewedAt),
-                  onTap: () => _openRepo(item),
-                ),
-                const SizedBox(height: 10),
-              ],
-            ],
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                '足迹仅保存在本机，最多保留 ${FootprintStore.maxItems} 条',
-                textAlign: TextAlign.center,
-                style: context.captionSmallStyle,
-              ),
+            ),
+            Expanded(
+              child: filtered.isEmpty
+                  ? const HmEmptyView(
+                      icon: Icons.search_off,
+                      title: '没有匹配的足迹',
+                      description: '尝试更换关键词筛选',
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+                      children: [
+                        for (final group in groups) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(2, 6, 2, 8),
+                            child: Text(
+                              group.title,
+                              style: context.captionStyle.copyWith(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          for (final item in group.items) ...[
+                            Dismissible(
+                              key: ValueKey('footprint_${item.fullName}'),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 18),
+                                decoration: BoxDecoration(
+                                  color: context.appColors.badge.withValues(
+                                    alpha: 0.14,
+                                  ),
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.card,
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.delete_outline,
+                                  color: context.appColors.badge,
+                                ),
+                              ),
+                              onDismissed: (_) => _removeItem(item),
+                              child: _FootprintTile(
+                                item: item,
+                                timeText: _formatHourMinute(item.viewedAt),
+                                onTap: () => _openRepo(item),
+                                onDelete: () => _removeItem(item),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                        ],
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            '左滑或点击删除可移除单条记录 · 最多保留 ${FootprintStore.maxItems} 条',
+                            textAlign: TextAlign.center,
+                            style: context.captionSmallStyle,
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           ],
         ),
@@ -171,17 +265,19 @@ class _FootprintPageState extends State<FootprintPage> {
   }
 }
 
-/// 单条历史足迹卡片（头像、仓库名、描述、语言、Star 数与浏览时间）
+/// 单条历史足迹卡片（头像、仓库名、描述、语言、Star 数、浏览时间与单条删除）
 class _FootprintTile extends StatelessWidget {
   const _FootprintTile({
     required this.item,
     required this.timeText,
     required this.onTap,
+    required this.onDelete,
   });
 
   final FootprintItem item;
   final String timeText;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -261,6 +357,16 @@ class _FootprintTile extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    onPressed: onDelete,
+                    icon: Icon(
+                      Icons.close,
+                      size: 16,
+                      color: context.appColors.textSecondary,
+                    ),
+                    tooltip: '删除足迹',
+                    visualDensity: VisualDensity.compact,
                   ),
                 ],
               ),

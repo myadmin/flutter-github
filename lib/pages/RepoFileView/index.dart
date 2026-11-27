@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gh_explorer/api/repo.dart';
@@ -36,6 +37,8 @@ class _RepoFileViewPageState extends State<RepoFileViewPage> {
   bool _isLoading = true;
   String _errorMessage = '';
   bool _showMarkdownSource = false;
+  int _loadSeq = 0;
+  CancelToken? _loadToken;
 
   /// 根据扩展名判断是否为图片资源（直接走 Raw 地址渲染）
   bool get _isImageFile {
@@ -68,6 +71,12 @@ class _RepoFileViewPageState extends State<RepoFileViewPage> {
     }
   }
 
+  @override
+  void dispose() {
+    _loadToken?.cancel();
+    super.dispose();
+  }
+
   /// 拉取文件原始文本内容
   Future<void> _load() async {
     if (widget.owner.isEmpty ||
@@ -79,6 +88,10 @@ class _RepoFileViewPageState extends State<RepoFileViewPage> {
       });
       return;
     }
+    final seq = ++_loadSeq;
+    _loadToken?.cancel();
+    final token = CancelToken();
+    _loadToken = token;
     setState(() {
       _isLoading = true;
       _errorMessage = '';
@@ -89,14 +102,15 @@ class _RepoFileViewPageState extends State<RepoFileViewPage> {
         widget.repoName,
         path: widget.path,
         ref: widget.branch,
+        cancelToken: token,
       );
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
       setState(() {
         _content = raw;
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (e is RequestCancelledException || !mounted || seq != _loadSeq) return;
       setState(() {
         _isLoading = false;
         _errorMessage = resolveErrorMessage(e, fallback: '文件内容加载失败');

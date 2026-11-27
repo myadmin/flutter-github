@@ -67,6 +67,7 @@ class IssueItem {
     String? state,
     int? commentsCount,
     bool? isMerged,
+    List<IssueLabel>? labels,
   }) {
     return IssueItem(
       id: id,
@@ -79,7 +80,7 @@ class IssueItem {
       isMerged: isMerged ?? this.isMerged,
       htmlUrl: htmlUrl,
       user: user,
-      labels: labels,
+      labels: labels ?? this.labels,
       createdAt: createdAt,
       updatedAt: updatedAt,
       closedAt: closedAt,
@@ -231,6 +232,83 @@ class IssueComment {
       htmlUrl: asString(json['html_url']),
       createdAt: asDateTime(json['created_at']),
       updatedAt: asDateTime(json['updated_at']),
+    );
+  }
+}
+
+/// Pull Request 总体审阅记录（Approve / Request Changes / Comment）
+class PullRequestReview {
+  const PullRequestReview({
+    required this.id,
+    required this.state,
+    required this.body,
+    required this.user,
+    this.submittedAt,
+  });
+
+  final int id;
+  final String state;
+  final String body;
+  final RepoOwner user;
+  final DateTime? submittedAt;
+
+  String get stateLabel {
+    switch (state.toUpperCase()) {
+      case 'APPROVED':
+        return '已批准';
+      case 'CHANGES_REQUESTED':
+        return '需修改';
+      case 'DISMISSED':
+        return '已驳回';
+      default:
+        return '已审阅';
+    }
+  }
+
+  factory PullRequestReview.fromJson(Map<String, dynamic> json) {
+    return PullRequestReview(
+      id: asInt(json['id']),
+      state: asString(json['state'], fallback: 'COMMENTED'),
+      body: asString(json['body']),
+      user: RepoOwner.fromJson(asMapOrEmpty(json['user'])),
+      submittedAt: asDateTime(json['submitted_at']),
+    );
+  }
+}
+
+/// Pull Request 行内代码审阅评论（绑定具体文件路径与 Diff 行号）
+class PullRequestReviewComment {
+  const PullRequestReviewComment({
+    required this.id,
+    required this.path,
+    required this.line,
+    required this.diffHunk,
+    required this.body,
+    required this.user,
+    required this.htmlUrl,
+    this.createdAt,
+  });
+
+  final int id;
+  final String path;
+  final int line;
+  final String diffHunk;
+  final String body;
+  final RepoOwner user;
+  final String htmlUrl;
+  final DateTime? createdAt;
+
+  factory PullRequestReviewComment.fromJson(Map<String, dynamic> json) {
+    final rawLine = asInt(json['line']);
+    return PullRequestReviewComment(
+      id: asInt(json['id']),
+      path: asString(json['path']),
+      line: rawLine > 0 ? rawLine : asInt(json['original_line']),
+      diffHunk: asString(json['diff_hunk']),
+      body: asString(json['body']),
+      user: RepoOwner.fromJson(asMapOrEmpty(json['user'])),
+      htmlUrl: asString(json['html_url']),
+      createdAt: asDateTime(json['created_at']),
     );
   }
 }

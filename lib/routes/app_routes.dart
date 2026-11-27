@@ -7,6 +7,7 @@ class AppRoutes {
 
   static const String home = '/';
   static const String login = '/login';
+  static const String searchPath = '/search';
   static const String repoDetailPath = '/repo';
   static const String repoFilesPath = '/repo/files';
   static const String repoFileViewPath = '/repo/blob';
@@ -112,4 +113,9 @@ class AppRoutes {
   static String userFollows(String login, {String tab = 'followers'}) =>
       '$userFollowsPath?login=${Uri.encodeQueryComponent(login)}'
       '&tab=${Uri.encodeQueryComponent(tab)}';
+
+  /// 站内搜索页（供 Topic 标签等外部入口携带查询词直达）：`/search?q=`
+  static String search([String query = '']) => query.trim().isEmpty
+      ? searchPath
+      : '$searchPath?q=${Uri.encodeQueryComponent(query.trim())}';
 }

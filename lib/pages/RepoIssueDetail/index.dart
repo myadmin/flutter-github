@@ -1,10 +1,11 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:dio/dio.dart';
 import 'package:gh_explorer/api/issue.dart';
+import 'package:gh_explorer/components/Issue/gh_issue_comment_card.dart';
+import 'package:gh_explorer/components/Issue/gh_pr_review_section.dart';
 import 'package:gh_explorer/components/Repo/gh_diff_patch_view.dart';
 import 'package:gh_explorer/components/common/app_error_view.dart';
-import 'package:gh_explorer/components/common/app_network_image.dart';
 import 'package:gh_explorer/components/common/gh_markdown_view.dart';
 import 'package:gh_explorer/components/common/hm_bottom_bar.dart';
 import 'package:gh_explorer/components/common/hm_empty_view.dart';
@@ -19,7 +20,7 @@ import 'package:gh_explorer/utils/external_link.dart';
 import 'package:gh_explorer/utils/formatters.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
 
-/// Issue / PR 详情与评论页（支持 PR 分支/Diff 审查、合入，以及编辑、关开状态与发评论）
+/// Issue / PR 详情与评论页（支持 PR 分支/Diff/行内审阅、合入、编辑、标签及评论互动）
 class RepoIssueDetailPage extends StatefulWidget {
   const RepoIssueDetailPage({
     super.key,
@@ -39,14 +40,20 @@ class RepoIssueDetailPage extends StatefulWidget {
 class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
   final UserController _userController = Get.find<UserController>();
   final TextEditingController _commentController = TextEditingController();
+  final FocusNode _commentFocusNode = FocusNode();
 
   IssueItem? _issue;
   PullRequestDetail? _prDetail;
+  List<PullRequestReview> _prReviews = const [];
+  List<PullRequestReviewComment> _prReviewComments = const [];
   List<CommitFileChange> _prFiles = const [];
   int _prFilesPage = 0;
   bool _prFilesLoading = false;
   bool _prFilesHasMore = false;
   String _prFilesError = '';
+  String _prFilesMoreError = '';
+  int _prFilesSeq = 0;
+  CancelToken? _prFilesToken;
   int _activeSectionTab = 0; // 0: 讨论, 1: 变更文件
 
   List<IssueComment> _comments = const [];
@@ -57,9 +64,8 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
   String _commentsMoreError = '';
   int _commentsSeq = 0;
   CancelToken? _commentsToken;
-  String _prFilesMoreError = '';
-  int _prFilesSeq = 0;
-  CancelToken? _prFilesToken;
+  CancelToken? _detailToken;
+
   bool _isLoading = true;
   bool _submitting = false;
   bool _updatingIssue = false;
@@ -82,15 +88,20 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
 
   @override
   void dispose() {
-    // 页面退出时取消所有在途的评论/文件请求，避免占用配额与内存
+    // 页面退出时取消所有在途请求，避免占用配额与内存
+    _detailToken?.cancel();
     _commentsToken?.cancel();
     _prFilesToken?.cancel();
     _commentController.dispose();
+    _commentFocusNode.dispose();
     super.dispose();
   }
 
   /// 加载 Issue 主体详情，主体成功后再异步加载评论及（若为 PR）PR 审查信息
   Future<void> _load() async {
+    _detailToken?.cancel();
+    final token = CancelToken();
+    _detailToken = token;
     setState(() {
       _isLoading = _issue == null;
       _errorMessage = '';
@@ -101,17 +112,17 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
         widget.repoName,
         widget.number,
       );
-      if (!mounted) return;
+      if (!mounted || token.isCancelled) return;
       setState(() {
         _issue = issue;
         _isLoading = false;
       });
       await Future.wait([
         _reloadComments(),
-        if (issue.isPullRequest) _loadPullRequestInfo(),
+        if (issue.isPullRequest) _loadPullRequestInfo(token),
       ]);
     } catch (e) {
-      if (!mounted) return;
+      if (e is RequestCancelledException || !mounted) return;
       final message = resolveErrorMessage(e, fallback: '加载 Issue 详情失败');
       if (_issue != null) {
         // 已有内容时刷新失败只提示，不把已渲染的详情整页替换成错误页
@@ -126,15 +137,34 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
     }
   }
 
-  Future<void> _loadPullRequestInfo() async {
+  Future<void> _loadPullRequestInfo(CancelToken token) async {
     try {
-      final detail = await getPullRequestDetailAPI(
-        widget.owner,
-        widget.repoName,
-        widget.number,
-      );
-      if (!mounted) return;
-      setState(() => _prDetail = detail);
+      final (detail, reviews, reviewComments) = await (
+        getPullRequestDetailAPI(
+          widget.owner,
+          widget.repoName,
+          widget.number,
+          cancelToken: token,
+        ),
+        getPullRequestReviewsAPI(
+          widget.owner,
+          widget.repoName,
+          widget.number,
+          cancelToken: token,
+        ).catchError((Object _) => const <PullRequestReview>[]),
+        getPullRequestReviewCommentsAPI(
+          widget.owner,
+          widget.repoName,
+          widget.number,
+          cancelToken: token,
+        ).catchError((Object _) => const <PullRequestReviewComment>[]),
+      ).wait;
+      if (!mounted || token.isCancelled) return;
+      setState(() {
+        _prDetail = detail;
+        _prReviews = reviews;
+        _prReviewComments = reviewComments;
+      });
     } catch (_) {
       // PR 元数据读取失败时保留基础正文展示，不拖垮页面
     }
@@ -167,7 +197,9 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
         _prFilesLoading = false;
       });
     } catch (e) {
-      if (!mounted || seq != _prFilesSeq) return;
+      if (e is RequestCancelledException || !mounted || seq != _prFilesSeq) {
+        return;
+      }
       setState(() {
         _prFilesLoading = false;
         _prFilesError = resolveErrorMessage(e, fallback: '变更文件加载失败');
@@ -199,10 +231,11 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
         _prFilesLoading = false;
       });
     } catch (e) {
-      if (!mounted || seq != _prFilesSeq) return;
+      if (e is RequestCancelledException || !mounted || seq != _prFilesSeq) {
+        return;
+      }
       setState(() {
         _prFilesLoading = false;
-        // 追加失败只影响尾部，已渲染的文件保持可见
         _prFilesMoreError = resolveErrorMessage(e, fallback: '加载更多文件失败');
       });
     }
@@ -235,7 +268,9 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
         _commentsLoading = false;
       });
     } catch (e) {
-      if (!mounted || seq != _commentsSeq) return;
+      if (e is RequestCancelledException || !mounted || seq != _commentsSeq) {
+        return;
+      }
       setState(() {
         _commentsLoading = false;
         _commentsError = resolveErrorMessage(e, fallback: '评论加载失败');
@@ -268,7 +303,9 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
         _commentsLoading = false;
       });
     } catch (e) {
-      if (!mounted || seq != _commentsSeq) return;
+      if (e is RequestCancelledException || !mounted || seq != _commentsSeq) {
+        return;
+      }
       setState(() {
         _commentsLoading = false;
         _commentsMoreError = resolveErrorMessage(e, fallback: '评论加载失败');
@@ -311,6 +348,122 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
       if (!mounted) return;
       setState(() => _submitting = false);
       ToastUtils.showToast(context, resolveErrorMessage(e, fallback: '发送评论失败'));
+    }
+  }
+
+  void _quoteComment(IssueComment comment) {
+    final firstLine = comment.body
+        .trim()
+        .split('\n')
+        .firstWhere((l) => l.trim().isNotEmpty, orElse: () => '')
+        .trim();
+    final snippet = firstLine.length > 80
+        ? '${firstLine.substring(0, 80)}...'
+        : firstLine;
+    final prefix = StringBuffer();
+    if (snippet.isNotEmpty) {
+      prefix.writeln('> $snippet');
+    }
+    if (comment.user.login.isNotEmpty) {
+      prefix.write('@${comment.user.login} ');
+    }
+    final existing = _commentController.text.trim();
+    final nextText = existing.isEmpty
+        ? prefix.toString()
+        : '$existing\n${prefix.toString()}';
+    _commentController.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextText.length),
+    );
+    _commentFocusNode.requestFocus();
+  }
+
+  Future<void> _reactComment(IssueComment comment, String reaction) async {
+    if (!_userController.isLoggedIn) {
+      ToastUtils.showToast(context, '登录后可添加回应');
+      await Navigator.pushNamed(context, AppRoutes.login);
+      return;
+    }
+    try {
+      await addIssueCommentReactionAPI(
+        widget.owner,
+        widget.repoName,
+        comment.id,
+        reaction,
+      );
+      if (!mounted) return;
+      ToastUtils.showToast(context, '已添加回应');
+    } catch (e) {
+      if (!mounted) return;
+      ToastUtils.showToast(context, resolveErrorMessage(e, fallback: '添加回应失败'));
+    }
+  }
+
+  Future<void> _editComment(IssueComment comment) async {
+    final result = await showDialog<({String title, String body})>(
+      context: context,
+      builder: (_) => _IssueFieldsDialog(
+        dialogTitle: '编辑评论',
+        bodyLabel: '评论内容',
+        initialBody: comment.body,
+        bodyEmptyError: '评论内容不能为空',
+        bodyMinLines: 3,
+      ),
+    );
+    if (result == null || !mounted) return;
+    try {
+      final updated = await updateIssueCommentAPI(
+        widget.owner,
+        widget.repoName,
+        comment.id,
+        result.body.trim(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _comments = _comments
+            .map((c) => c.id == comment.id ? updated : c)
+            .toList();
+      });
+      ToastUtils.showToast(context, '评论已更新');
+    } catch (e) {
+      if (!mounted) return;
+      ToastUtils.showToast(context, resolveErrorMessage(e, fallback: '更新评论失败'));
+    }
+  }
+
+  Future<void> _deleteComment(IssueComment comment) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('删除评论'),
+        content: const Text('确定删除这条评论吗？删除后无法恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await deleteIssueCommentAPI(widget.owner, widget.repoName, comment.id);
+      if (!mounted) return;
+      setState(() {
+        _comments = _comments.where((c) => c.id != comment.id).toList();
+        final currentCount = _issue?.commentsCount ?? 0;
+        if (currentCount > 0) {
+          _issue = _issue?.copyWith(commentsCount: currentCount - 1);
+        }
+      });
+      ToastUtils.showToast(context, '已删除评论');
+    } catch (e) {
+      if (!mounted) return;
+      ToastUtils.showToast(context, resolveErrorMessage(e, fallback: '删除评论失败'));
     }
   }
 
@@ -362,70 +515,28 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
   Future<void> _editIssueContent() async {
     final issue = _issue;
     if (issue == null || _updatingIssue) return;
-    final titleCtrl = TextEditingController(text: issue.title);
-    final bodyCtrl = TextEditingController(text: issue.body);
-    var titleError = '';
+    final result = await showDialog<({String title, String body})>(
+      context: context,
+      builder: (_) => _IssueFieldsDialog(
+        dialogTitle: '编辑 #${issue.number}',
+        titleLabel: '标题',
+        initialTitle: issue.title,
+        maxTitleLength: 256,
+        titleEmptyError: '标题不能为空',
+        bodyLabel: '正文内容',
+        initialBody: issue.body,
+        bodyMinLines: 4,
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() => _updatingIssue = true);
     try {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (ctx, setDialogState) => AlertDialog(
-            title: Text('编辑 #${issue.number}'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: titleCtrl,
-                    maxLength: 256,
-                    decoration: InputDecoration(
-                      labelText: '标题',
-                      errorText: titleError.isEmpty ? null : titleError,
-                    ),
-                    onChanged: (_) {
-                      if (titleError.isNotEmpty) {
-                        setDialogState(() => titleError = '');
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: bodyCtrl,
-                    minLines: 4,
-                    maxLines: 8,
-                    decoration: const InputDecoration(labelText: '正文内容'),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('取消'),
-              ),
-              TextButton(
-                // 在弹窗内校验，避免关闭后才报错导致刚输入的正文丢失
-                onPressed: () {
-                  if (titleCtrl.text.trim().isEmpty) {
-                    setDialogState(() => titleError = '标题不能为空');
-                    return;
-                  }
-                  Navigator.pop(dialogContext, true);
-                },
-                child: const Text('保存'),
-              ),
-            ],
-          ),
-        ),
-      );
-      if (confirmed != true || !mounted) return;
-      setState(() => _updatingIssue = true);
       final updated = await updateRepoIssueAPI(
         widget.owner,
         widget.repoName,
         widget.number,
-        title: titleCtrl.text.trim(),
-        body: bodyCtrl.text,
+        title: result.title.trim(),
+        body: result.body,
       );
       if (!mounted) return;
       setState(() {
@@ -437,9 +548,118 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
       if (!mounted) return;
       setState(() => _updatingIssue = false);
       ToastUtils.showToast(context, resolveErrorMessage(e, fallback: '保存修改失败'));
-    } finally {
-      titleCtrl.dispose();
-      bodyCtrl.dispose();
+    }
+  }
+
+  Future<void> _editIssueLabels() async {
+    final issue = _issue;
+    if (issue == null || _updatingIssue) return;
+    List<IssueLabel> repoLabels;
+    try {
+      repoLabels = await getRepoLabelsAPI(widget.owner, widget.repoName);
+    } catch (e) {
+      if (!mounted) return;
+      ToastUtils.showToast(
+        context,
+        resolveErrorMessage(e, fallback: '获取仓库标签失败'),
+      );
+      return;
+    }
+    if (!mounted) return;
+    if (repoLabels.isEmpty) {
+      ToastUtils.showToast(context, '该仓库暂无可选标签');
+      return;
+    }
+    final selected = issue.labels.map((l) => l.name).toSet();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('设置标签'),
+          content: SingleChildScrollView(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final label in repoLabels)
+                  FilterChip(
+                    label: Text(label.name),
+                    selected: selected.contains(label.name),
+                    onSelected: (v) {
+                      setDialogState(() {
+                        if (v) {
+                          selected.add(label.name);
+                        } else {
+                          selected.remove(label.name);
+                        }
+                      });
+                    },
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, true),
+              child: const Text('保存标签'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _updatingIssue = true);
+    try {
+      final updated = await setIssueLabelsAPI(
+        widget.owner,
+        widget.repoName,
+        widget.number,
+        selected.toList(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _issue = _issue?.copyWith(labels: updated);
+        _updatingIssue = false;
+      });
+      ToastUtils.showToast(context, '标签已更新');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _updatingIssue = false);
+      ToastUtils.showToast(context, resolveErrorMessage(e, fallback: '更新标签失败'));
+    }
+  }
+
+  Future<void> _submitPrReview() async {
+    final pr = _prDetail;
+    if (pr == null || _updatingIssue) return;
+    final result = await showDialog<({String event, String body})>(
+      context: context,
+      builder: (_) => _PrReviewDialog(number: pr.number),
+    );
+    if (result == null || !mounted) return;
+    setState(() => _updatingIssue = true);
+    try {
+      final created = await submitPullRequestReviewAPI(
+        widget.owner,
+        widget.repoName,
+        widget.number,
+        event: result.event,
+        body: result.body.trim(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _prReviews = [..._prReviews, created];
+        _updatingIssue = false;
+      });
+      ToastUtils.showToast(context, '审阅意见已提交');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _updatingIssue = false);
+      ToastUtils.showToast(context, resolveErrorMessage(e, fallback: '提交审阅失败'));
     }
   }
 
@@ -558,6 +778,8 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
                     }
                   case 'edit':
                     _editIssueContent();
+                  case 'labels':
+                    _editIssueLabels();
                   case 'toggle_state':
                     _toggleIssueState();
                 }
@@ -572,6 +794,10 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
                   const PopupMenuItem<String>(
                     value: 'edit',
                     child: Text('编辑标题与正文'),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'labels',
+                    child: Text('编辑标签'),
                   ),
                   if (!(_prDetail?.merged ?? false))
                     PopupMenuItem<String>(
@@ -592,6 +818,7 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
                   Expanded(
                     child: TextField(
                       controller: _commentController,
+                      focusNode: _commentFocusNode,
                       minLines: 1,
                       maxLines: 3,
                       decoration: InputDecoration(
@@ -683,6 +910,7 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
         child: RefreshIndicator(
           onRefresh: _load,
           child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(12),
             children: [
               Container(
@@ -727,9 +955,44 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
                         ),
                       ],
                     ),
+                    if (issue.labels.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final label in issue.labels)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: context.appColors.primarySurface,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.pill,
+                                ),
+                              ),
+                              child: Text(
+                                label.name,
+                                style: context.captionSmallStyle.copyWith(
+                                  color: context.appColors.primary,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
                     if (pr != null) ...[
                       const SizedBox(height: 10),
-                      _buildPrSummaryCard(pr),
+                      GhPrSummaryCard(
+                        pr: pr,
+                        reviews: _prReviews,
+                        isLoggedIn: _userController.isLoggedIn,
+                        updatingIssue: _updatingIssue,
+                        onMergeTap: _confirmAndMergePr,
+                        onReviewTap: _submitPrReview,
+                      ),
                     ],
                     if (issue.body.trim().isNotEmpty) ...[
                       Divider(height: 20, color: context.appColors.divider),
@@ -786,113 +1049,13 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
     );
   }
 
-  Widget _buildPrSummaryCard(PullRequestDetail pr) {
-    final colors = context.appColors;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colors.inputFill.withValues(alpha: 0.65),
-        borderRadius: BorderRadius.circular(AppRadius.small),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.alt_route, size: 15, color: colors.primary),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  '${pr.headRef} → ${pr.baseRef}',
-                  style: context.monoSmallStyle.copyWith(
-                    color: colors.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 10,
-            runSpacing: 4,
-            children: [
-              Text('${pr.commits} 次提交', style: context.captionSmallStyle),
-              Text(
-                '+${pr.additions}',
-                style: context.captionSmallStyle.copyWith(
-                  color: colors.success,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                '-${pr.deletions}',
-                style: context.captionSmallStyle.copyWith(
-                  color: colors.badge,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text('${pr.changedFiles} 个文件', style: context.captionSmallStyle),
-            ],
-          ),
-          if (_userController.isLoggedIn &&
-              pr.isOpen &&
-              !pr.merged &&
-              !pr.draft) ...[
-            const SizedBox(height: 10),
-            SizedBox(
-              height: 34,
-              child: ElevatedButton.icon(
-                // mergeable == false 表示与基线冲突，直接合并必然失败，先置灰
-                onPressed: (_updatingIssue || pr.mergeable == false)
-                    ? null
-                    : _confirmAndMergePr,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colors.success,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: const StadiumBorder(),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                ),
-                icon: const Icon(Icons.merge_type, size: 16),
-                label: const Text(
-                  '合并 Pull Request',
-                  style: TextStyle(fontSize: 12),
-                ),
-              ),
-            ),
-            if (pr.mergeable == false) ...[
-              const SizedBox(height: 6),
-              Text(
-                '当前分支与基线存在冲突，请先解决冲突后再合并',
-                style: context.captionSmallStyle.copyWith(color: colors.badge),
-              ),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
   List<Widget> _buildPrFilesSection(PullRequestDetail? pr) {
     final headRef = pr?.headSha.isNotEmpty == true
         ? pr!.headSha
         : (pr?.headRef ?? '');
     return [
       if (_prFilesError.isNotEmpty && _prFiles.isEmpty)
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: context.appColors.cardBackground,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-          ),
-          child: Row(
-            children: [
-              Expanded(child: Text(_prFilesError, style: context.captionStyle)),
-              TextButton(onPressed: _reloadPrFiles, child: const Text('重试')),
-            ],
-          ),
-        )
+        GhInlineRetryBanner(message: _prFilesError, onRetry: _reloadPrFiles)
       else if (_prFiles.isEmpty && !_prFilesLoading)
         Container(
           padding: const EdgeInsets.all(20),
@@ -922,20 +1085,9 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
           const SizedBox(height: 10),
         ],
       if (_prFilesMoreError.isNotEmpty)
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: context.appColors.cardBackground,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(_prFilesMoreError, style: context.captionStyle),
-              ),
-              TextButton(onPressed: _loadMorePrFiles, child: const Text('重试')),
-            ],
-          ),
+        GhInlineRetryBanner(
+          message: _prFilesMoreError,
+          onRetry: _loadMorePrFiles,
         )
       else if (_prFilesLoading)
         const Padding(
@@ -958,27 +1110,35 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
             ),
           ),
         ),
+      if (_prReviewComments.isNotEmpty) ...[
+        const SizedBox(height: 14),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Text(
+            '行内代码评审批注 (${_prReviewComments.length})',
+            style: context.bodyStrongStyle,
+          ),
+        ),
+        const SizedBox(height: 6),
+        for (final rc in _prReviewComments) ...[
+          GhPrReviewCommentTile(
+            comment: rc,
+            owner: widget.owner,
+            repoName: widget.repoName,
+          ),
+          const SizedBox(height: 10),
+        ],
+      ],
     ];
   }
 
   List<Widget> _buildCommentsSection() {
+    final currentLogin = _userController.isLoggedIn
+        ? _userController.user.value.login
+        : '';
     return [
       if (_commentsError.isNotEmpty && _comments.isEmpty)
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: context.appColors.cardBackground,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(_commentsError, style: context.captionStyle),
-              ),
-              TextButton(onPressed: _reloadComments, child: const Text('重试')),
-            ],
-          ),
-        )
+        GhInlineRetryBanner(message: _commentsError, onRetry: _reloadComments)
       else if (_comments.isEmpty && !_commentsLoading)
         Container(
           padding: const EdgeInsets.all(20),
@@ -990,28 +1150,22 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
         )
       else
         for (final comment in _comments) ...[
-          _CommentCard(
+          GhIssueCommentCard(
             comment: comment,
             owner: widget.owner,
             repoName: widget.repoName,
+            currentUserLogin: currentLogin,
+            onQuoteReply: () => _quoteComment(comment),
+            onReact: (code) => _reactComment(comment, code),
+            onEdit: () => _editComment(comment),
+            onDelete: () => _deleteComment(comment),
           ),
           const SizedBox(height: 10),
         ],
       if (_commentsMoreError.isNotEmpty)
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: context.appColors.cardBackground,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(_commentsMoreError, style: context.captionStyle),
-              ),
-              TextButton(onPressed: _loadMoreComments, child: const Text('重试')),
-            ],
-          ),
+        GhInlineRetryBanner(
+          message: _commentsMoreError,
+          onRetry: _loadMoreComments,
         )
       else if (_commentsLoading)
         const Padding(
@@ -1038,54 +1192,212 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
   }
 }
 
-/// 单条 Issue 评论卡片（头像、作者、时间与 Markdown 正文）
-class _CommentCard extends StatelessWidget {
-  const _CommentCard({
-    required this.comment,
-    required this.owner,
-    required this.repoName,
+/// 弹窗文本编辑表单（由弹窗 State 托管 TextEditingController，避免退场动画期间提前 dispose）
+class _IssueFieldsDialog extends StatefulWidget {
+  const _IssueFieldsDialog({
+    required this.dialogTitle,
+    required this.bodyLabel,
+    required this.initialBody,
+    required this.bodyMinLines,
+    this.titleLabel,
+    this.initialTitle = '',
+    this.maxTitleLength,
+    this.titleEmptyError,
+    this.bodyEmptyError,
   });
 
-  final IssueComment comment;
-  final String owner;
-  final String repoName;
+  final String dialogTitle;
+  final String? titleLabel;
+  final String initialTitle;
+  final int? maxTitleLength;
+  final String? titleEmptyError;
+  final String bodyLabel;
+  final String initialBody;
+  final int bodyMinLines;
+  final String? bodyEmptyError;
+
+  @override
+  State<_IssueFieldsDialog> createState() => _IssueFieldsDialogState();
+}
+
+class _IssueFieldsDialogState extends State<_IssueFieldsDialog> {
+  late final TextEditingController _titleCtrl;
+  late final TextEditingController _bodyCtrl;
+  String _titleError = '';
+  String _bodyError = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _titleCtrl = TextEditingController(text: widget.initialTitle);
+    _bodyCtrl = TextEditingController(text: widget.initialBody);
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _bodyCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (widget.titleLabel != null &&
+        widget.titleEmptyError != null &&
+        _titleCtrl.text.trim().isEmpty) {
+      setState(() => _titleError = widget.titleEmptyError!);
+      return;
+    }
+    if (widget.bodyEmptyError != null && _bodyCtrl.text.trim().isEmpty) {
+      setState(() => _bodyError = widget.bodyEmptyError!);
+      return;
+    }
+    Navigator.pop(context, (title: _titleCtrl.text, body: _bodyCtrl.text));
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: context.appColors.cardBackground,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(
-          color: context.appColors.divider.withValues(alpha: 0.6),
+    final bodyField = TextField(
+      controller: _bodyCtrl,
+      minLines: widget.bodyMinLines,
+      maxLines: 8,
+      decoration: InputDecoration(
+        labelText: widget.bodyLabel,
+        errorText: _bodyError.isEmpty ? null : _bodyError,
+      ),
+      onChanged: (_) {
+        if (_bodyError.isNotEmpty) setState(() => _bodyError = '');
+      },
+    );
+
+    return AlertDialog(
+      title: Text(widget.dialogTitle),
+      content: widget.titleLabel == null
+          ? bodyField
+          : SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: _titleCtrl,
+                    maxLength: widget.maxTitleLength,
+                    decoration: InputDecoration(
+                      labelText: widget.titleLabel,
+                      errorText: _titleError.isEmpty ? null : _titleError,
+                    ),
+                    onChanged: (_) {
+                      if (_titleError.isNotEmpty) {
+                        setState(() => _titleError = '');
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  bodyField,
+                ],
+              ),
+            ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        TextButton(onPressed: _submit, child: const Text('保存')),
+      ],
+    );
+  }
+}
+
+/// PR 审阅意见弹窗（由弹窗 State 托管输入控制器）
+class _PrReviewDialog extends StatefulWidget {
+  const _PrReviewDialog({required this.number});
+
+  final int number;
+
+  @override
+  State<_PrReviewDialog> createState() => _PrReviewDialogState();
+}
+
+class _PrReviewDialogState extends State<_PrReviewDialog> {
+  final TextEditingController _bodyCtrl = TextEditingController();
+  String _event = 'APPROVE';
+  String _errText = '';
+
+  @override
+  void dispose() {
+    _bodyCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('审阅 PR #${widget.number}'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            RadioGroup<String>(
+              groupValue: _event,
+              onChanged: (v) {
+                if (v != null) {
+                  setState(() {
+                    _event = v;
+                    _errText = '';
+                  });
+                }
+              },
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<String>(
+                    value: 'APPROVE',
+                    title: Text('批准合并 (Approve)'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  RadioListTile<String>(
+                    value: 'COMMENT',
+                    title: Text('仅发表审阅意见 (Comment)'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  RadioListTile<String>(
+                    value: 'REQUEST_CHANGES',
+                    title: Text('请求修改 (Request changes)'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+            ),
+            TextField(
+              controller: _bodyCtrl,
+              minLines: 2,
+              maxLines: 5,
+              decoration: InputDecoration(
+                labelText: '审阅说明（选填，请求修改时必填）',
+                errorText: _errText.isEmpty ? null : _errText,
+              ),
+              onChanged: (_) {
+                if (_errText.isNotEmpty) setState(() => _errText = '');
+              },
+            ),
+          ],
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              AppNetworkImage(
-                url: comment.user.avatarUrl,
-                width: 24,
-                height: 24,
-                decodeWidth: 24,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              const SizedBox(width: 8),
-              Text(comment.user.login, style: context.bodyStrongStyle),
-              const Spacer(),
-              Text(
-                formatRelativeTime(comment.createdAt),
-                style: context.captionSmallStyle,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          GhMarkdownView(data: comment.body, owner: owner, repo: repoName),
-        ],
-      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        TextButton(
+          onPressed: () {
+            if (_event == 'REQUEST_CHANGES' && _bodyCtrl.text.trim().isEmpty) {
+              setState(() => _errText = '请求修改时请说明原因');
+              return;
+            }
+            Navigator.pop(context, (event: _event, body: _bodyCtrl.text));
+          },
+          child: const Text('提交审阅'),
+        ),
+      ],
     );
   }
 }

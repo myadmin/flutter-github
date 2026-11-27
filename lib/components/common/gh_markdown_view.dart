@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:gh_explorer/components/common/app_network_image.dart';
 import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
@@ -209,24 +210,8 @@ class GhMarkdownView extends StatelessWidget {
         ? resolveRepoAssetUrl(raw, owner: owner, repo: repo, branch: branch)
         : raw;
 
-    final lower = resolved.toLowerCase();
-    // Image.network 不支持 SVG（如 shields.io 徽章），降级为紧凑文本胶囊
-    if (lower.endsWith('.svg') ||
-        lower.contains('.svg?') ||
-        lower.contains('img.shields.io') ||
-        lower.contains('shields.io/badge')) {
-      final badgeLabel = (alt != null && alt.trim().isNotEmpty)
-          ? alt.trim()
-          : 'Badge';
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: context.appColors.inputFill,
-          borderRadius: BorderRadius.circular(AppRadius.small),
-          border: Border.all(color: context.appColors.divider),
-        ),
-        child: Text(badgeLabel, style: context.captionSmallStyle),
-      );
+    if (isSvgImageUrl(resolved)) {
+      return _buildSvgBadge(context, resolved, alt);
     }
 
     // README 内图片通常为整幅截图，按容器宽度解码即可，避免原图分辨率占满内存
@@ -245,6 +230,8 @@ class GhMarkdownView extends StatelessWidget {
         child: Image.network(
           resolved,
           cacheWidth: cacheWidth,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.medium,
           semanticLabel: label,
           loadingBuilder: (context, child, progress) {
             if (progress == null) return child;
@@ -254,6 +241,74 @@ class GhMarkdownView extends StatelessWidget {
             return _buildImageFallback(context, alt, loading: false);
           },
         ),
+      ),
+    );
+  }
+
+  /// 将 SVG 徽章 / shields.io 渲染为紧凑语义徽章胶囊（不吞外层超链接手势）
+  Widget _buildSvgBadge(BuildContext context, String url, String? alt) {
+    final c = context.appColors;
+    var label = (alt ?? '').trim();
+    if (label.isEmpty) {
+      final shieldsMatch = RegExp(
+        r'/badge/([^/?#]+)',
+        caseSensitive: false,
+      ).firstMatch(url);
+      if (shieldsMatch != null) {
+        final rawSeg = Uri.decodeComponent(shieldsMatch.group(1) ?? '');
+        final parts = rawSeg.split('-');
+        if (parts.length >= 2) {
+          label = '${parts[0]} ${parts[1]}'.replaceAll('_', ' ').trim();
+        }
+      }
+    }
+    if (label.isEmpty) label = 'Badge';
+
+    final lower = url.toLowerCase();
+    final isSuccessTone =
+        lower.contains('brightgreen') ||
+        lower.contains('-green') ||
+        lower.contains('passing');
+    final isWarningTone =
+        lower.contains('failing') ||
+        lower.contains('-red') ||
+        lower.contains('critical');
+    final bgColor = isSuccessTone
+        ? c.successSurface
+        : isWarningTone
+        ? c.badge.withValues(alpha: 0.12)
+        : c.inputFill;
+    final fgColor = isSuccessTone
+        ? c.success
+        : isWarningTone
+        ? c.badge
+        : c.textSecondary;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(AppRadius.small),
+        border: Border.all(color: fgColor.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.verified_outlined, size: 12, color: fgColor),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.captionSmallStyle.copyWith(
+                color: fgColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

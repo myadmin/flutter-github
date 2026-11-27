@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gh_explorer/api/repo.dart';
@@ -34,6 +35,9 @@ class RepoCommitsPage extends StatefulWidget {
 
 class _RepoCommitsPageState extends State<RepoCommitsPage> {
   final ScrollController _scrollController = ScrollController();
+  late String _currentBranch;
+  List<RepoBranch> _branches = const [];
+  CancelToken? _branchesToken;
 
   late final PagedListController<CommitItem> _list =
       PagedListController<CommitItem>(
@@ -41,7 +45,7 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
         loader: (page) => getRepoCommitsAPI(
           widget.owner,
           widget.repoName,
-          branch: widget.branch,
+          branch: _currentBranch,
           page: page,
           cancelToken: _list.cancelToken,
         ),
@@ -54,17 +58,42 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
   @override
   void initState() {
     super.initState();
+    _currentBranch = widget.branch;
     _scrollController.addListener(_onScroll);
     if (widget.owner.isNotEmpty && widget.repoName.isNotEmpty) {
       _list.refresh();
+      _loadBranches();
     }
   }
 
   @override
   void dispose() {
+    _branchesToken?.cancel();
     _scrollController.dispose();
     _list.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadBranches() async {
+    final token = CancelToken();
+    _branchesToken = token;
+    try {
+      final list = await getAllRepoBranchesAPI(
+        widget.owner,
+        widget.repoName,
+        maxPages: 1,
+        cancelToken: token,
+      );
+      if (!mounted) return;
+      setState(() => _branches = list);
+    } catch (_) {}
+  }
+
+  void _switchBranch(String branch) {
+    if (branch == _currentBranch) return;
+    setState(() => _currentBranch = branch);
+    _list.clear();
+    _list.refresh();
   }
 
   /// 滚动距底部不足 200px 时自动加载下一页提交记录
@@ -90,7 +119,7 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
       backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
         title: Text(
-          widget.branch.isEmpty ? '提交历史' : '提交历史 (${widget.branch})',
+          _currentBranch.isEmpty ? '提交历史' : '提交历史 ($_currentBranch)',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -98,6 +127,35 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
         backgroundColor: context.appColors.pageBackground,
         foregroundColor: context.appColors.textPrimary,
         elevation: 0,
+        actions: [
+          if (_branches.isNotEmpty)
+            PopupMenuButton<String>(
+              initialValue: _currentBranch,
+              onSelected: _switchBranch,
+              tooltip: '切换分支',
+              itemBuilder: (context) => [
+                for (final branch in _branches)
+                  PopupMenuItem<String>(
+                    value: branch.name,
+                    child: Text(branch.name),
+                  ),
+              ],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.alt_route, size: 16),
+                    const SizedBox(width: 4),
+                    Text(
+                      _currentBranch.isEmpty ? '默认分支' : _currentBranch,
+                      style: context.bodySmallStyle,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
       body: Center(
         child: ConstrainedBox(

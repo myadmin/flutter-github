@@ -300,6 +300,64 @@ Future<PageResult<CommitFileChange>> getPullRequestFilesAPI(
   );
 }
 
+/// 修改评论正文（需要是本人评论或具备仓库维护权限）
+Future<IssueComment> updateIssueCommentAPI(
+  String owner,
+  String repo,
+  int commentId,
+  String body,
+) async {
+  final encodedOwner = Uri.encodeComponent(owner.trim());
+  final encodedRepo = Uri.encodeComponent(repo.trim());
+  final data = await dioRequest.patch(
+    '${HttpConstants.repos}/$encodedOwner/$encodedRepo/issues/comments/$commentId',
+    data: {'body': body.trim()},
+  );
+  return IssueComment.fromJson(asMap(data));
+}
+
+/// 删除指定评论
+Future<void> deleteIssueCommentAPI(
+  String owner,
+  String repo,
+  int commentId,
+) async {
+  final encodedOwner = Uri.encodeComponent(owner.trim());
+  final encodedRepo = Uri.encodeComponent(repo.trim());
+  await dioRequest.delete(
+    '${HttpConstants.repos}/$encodedOwner/$encodedRepo/issues/comments/$commentId',
+  );
+}
+
+/// 为指定 Issue/PR 评论添加 Emoji Reaction（如 `+1` / `heart` / `rocket` / `eyes`）
+Future<void> addIssueCommentReactionAPI(
+  String owner,
+  String repo,
+  int commentId,
+  String content,
+) async {
+  final encodedOwner = Uri.encodeComponent(owner.trim());
+  final encodedRepo = Uri.encodeComponent(repo.trim());
+  await dioRequest.post(
+    '${HttpConstants.repos}/$encodedOwner/$encodedRepo/issues/comments/$commentId/reactions',
+    data: {'content': content},
+  );
+}
+
+/// 全量更新 Issue / PR 的标签列表
+Future<List<IssueLabel>> setIssueLabelsAPI(
+  String owner,
+  String repo,
+  int number,
+  List<String> labels,
+) async {
+  final data = await dioRequest.put(
+    '${_issuesBase(owner, repo)}/$number/labels',
+    data: {'labels': labels},
+  );
+  return asModelList(data, IssueLabel.fromJson);
+}
+
 /// 合并指定 Pull Request（`mergeMethod`: `merge` / `squash` / `rebase`）
 ///
 /// `sha` 为调用方审阅过的 head 提交，GitHub 会拒绝与当前 head 不一致的合并请求，
@@ -323,4 +381,53 @@ Future<({bool merged, String message})> mergePullRequestAPI(
     ),
   );
   return (merged: asBool(data['merged']), message: asString(data['message']));
+}
+
+/// 获取 Pull Request 总体审阅结论列表
+Future<List<PullRequestReview>> getPullRequestReviewsAPI(
+  String owner,
+  String repo,
+  int number, {
+  CancelToken? cancelToken,
+}) async {
+  final data = await dioRequest.get(
+    '${_pullsBase(owner, repo)}/$number/reviews',
+    params: {'per_page': 30},
+    cancelToken: cancelToken,
+  );
+  return asModelList(data, PullRequestReview.fromJson);
+}
+
+/// 获取 Pull Request 行内代码评审评论列表
+Future<List<PullRequestReviewComment>> getPullRequestReviewCommentsAPI(
+  String owner,
+  String repo,
+  int number, {
+  CancelToken? cancelToken,
+}) async {
+  final data = await dioRequest.get(
+    '${_pullsBase(owner, repo)}/$number/comments',
+    params: {'per_page': 50},
+    cancelToken: cancelToken,
+  );
+  return asModelList(data, PullRequestReviewComment.fromJson);
+}
+
+/// 提交 Pull Request 代码审阅结论（`APPROVE` / `REQUEST_CHANGES` / `COMMENT`）
+Future<PullRequestReview> submitPullRequestReviewAPI(
+  String owner,
+  String repo,
+  int number, {
+  required String event,
+  String body = '',
+}) async {
+  final payload = <String, dynamic>{
+    'event': event,
+    if (body.trim().isNotEmpty) 'body': body.trim(),
+  };
+  final data = await dioRequest.post(
+    '${_pullsBase(owner, repo)}/$number/reviews',
+    data: payload,
+  );
+  return PullRequestReview.fromJson(asMap(data));
 }

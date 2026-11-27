@@ -62,14 +62,31 @@ class _SearchViewState extends State<SearchView> {
   _SearchTarget _target = _SearchTarget.repos;
   String _repoSort = 'stars';
   String _userSort = 'followers';
+  String _repoLanguage = '';
+  bool _excludeForks = false;
   String _activeQuery = '';
   List<String> _history = const [];
+
+  String _effectiveRepoQuery() {
+    final buffer = StringBuffer(_activeQuery.trim());
+    final lower = _activeQuery.toLowerCase();
+    if (_repoLanguage.isNotEmpty && !lower.contains('language:')) {
+      final lang = _repoLanguage.contains(' ')
+          ? '"$_repoLanguage"'
+          : _repoLanguage;
+      buffer.write(' language:$lang');
+    }
+    if (_excludeForks && !lower.contains('fork:')) {
+      buffer.write(' fork:false');
+    }
+    return buffer.toString().trim();
+  }
 
   late final PagedListController<RepoItem> _repoList =
       PagedListController<RepoItem>(
         pageSize: GlobalConstants.defaultPageSize,
         loader: (page) => searchReposAPI(
-          query: _activeQuery,
+          query: _effectiveRepoQuery(),
           sort: _repoSort,
           page: page,
           cancelToken: _repoList.cancelToken,
@@ -229,6 +246,16 @@ class _SearchViewState extends State<SearchView> {
         ? _repoSorts
         : _userSorts;
     final currentSort = _target == _SearchTarget.repos ? _repoSort : _userSort;
+    const languages = [
+      '',
+      'Dart',
+      'TypeScript',
+      'Python',
+      'Go',
+      'Rust',
+      'Java',
+      'Swift',
+    ];
 
     return Container(
       color: context.appColors.cardBackground,
@@ -306,6 +333,68 @@ class _SearchViewState extends State<SearchView> {
                   _refreshCurrentTarget();
                 },
               ),
+              if (_target == _SearchTarget.repos) ...[
+                const SizedBox(width: 8),
+                PopupMenuButton<String>(
+                  initialValue: _repoLanguage,
+                  tooltip: '语言过滤',
+                  onSelected: (lang) {
+                    if (_repoLanguage == lang) return;
+                    setState(() => _repoLanguage = lang);
+                    _refreshCurrentTarget();
+                  },
+                  itemBuilder: (context) => [
+                    for (final lang in languages)
+                      PopupMenuItem<String>(
+                        value: lang,
+                        child: Text(lang.isEmpty ? '全部语言' : lang),
+                      ),
+                  ],
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _repoLanguage.isNotEmpty
+                          ? context.appColors.primarySurface
+                          : context.appColors.inputFill,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _repoLanguage.isEmpty ? '全部语言' : _repoLanguage,
+                          style: context.captionSmallStyle.copyWith(
+                            color: _repoLanguage.isNotEmpty
+                                ? context.appColors.primary
+                                : context.appColors.textSecondary,
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_drop_down,
+                          size: 15,
+                          color: _repoLanguage.isNotEmpty
+                              ? context.appColors.primary
+                              : context.appColors.textSecondary,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                FilterChip(
+                  label: const Text('不含 Fork'),
+                  selected: _excludeForks,
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onSelected: (val) {
+                    setState(() => _excludeForks = val);
+                    _refreshCurrentTarget();
+                  },
+                ),
+              ],
               const Spacer(),
               PopupMenuButton<String>(
                 initialValue: currentSort,
@@ -509,6 +598,34 @@ class _SearchViewState extends State<SearchView> {
           ),
         );
       },
+    );
+  }
+}
+
+/// 独立路由承载的搜索页面（供详情页点击 Topic 标签等场景带词直达）
+class SearchPage extends StatelessWidget {
+  const SearchPage({super.key, this.initialQuery = ''});
+
+  final String initialQuery;
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmed = initialQuery.trim();
+    return Scaffold(
+      backgroundColor: context.appColors.pageBackground,
+      appBar: AppBar(
+        title: const Text('搜索'),
+        centerTitle: true,
+        backgroundColor: context.appColors.pageBackground,
+        foregroundColor: context.appColors.textPrimary,
+        elevation: 0,
+      ),
+      body: SafeArea(
+        child: SearchView(
+          presetQuery: trimmed,
+          queryTicket: trimmed.isEmpty ? 0 : 1,
+        ),
+      ),
     );
   }
 }

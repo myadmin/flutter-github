@@ -17,9 +17,15 @@ Future<({GithubUser user, List<String> scopes})> getCurrentUserAPI() async {
 }
 
 /// 获取指定 GitHub 用户 / 组织详情
-Future<GithubUser> getUserDetailAPI(String login) async {
+Future<GithubUser> getUserDetailAPI(
+  String login, {
+  CancelToken? cancelToken,
+}) async {
   final encoded = Uri.encodeComponent(login.trim());
-  final data = await dioRequest.get('${HttpConstants.users}/$encoded');
+  final data = await dioRequest.get(
+    '${HttpConstants.users}/$encoded',
+    cancelToken: cancelToken,
+  );
   return GithubUser.fromJson(asMap(data));
 }
 
@@ -122,9 +128,15 @@ Future<PageResult<RepoOwner>> getUserFollowingAPI(
 }
 
 /// 检查当前登录用户是否关注了指定用户
-Future<bool> checkFollowingUserAPI(String login) async {
+Future<bool> checkFollowingUserAPI(
+  String login, {
+  CancelToken? cancelToken,
+}) async {
   final encoded = Uri.encodeComponent(login.trim());
-  return dioRequest.checkExists('${HttpConstants.userFollowing}/$encoded');
+  return dioRequest.checkExists(
+    '${HttpConstants.userFollowing}/$encoded',
+    cancelToken: cancelToken,
+  );
 }
 
 /// 关注指定用户

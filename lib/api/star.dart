@@ -10,8 +10,15 @@ String _repoStarPath(String owner, String repo) =>
     '${HttpConstants.userStarred}/${Uri.encodeComponent(owner.trim())}/${Uri.encodeComponent(repo.trim())}';
 
 /// 检查当前用户是否已 Star 该仓库（204 为 true，404 为 false）
-Future<bool> checkRepoStarredAPI(String owner, String repo) {
-  return dioRequest.checkExists(_repoStarPath(owner, repo));
+Future<bool> checkRepoStarredAPI(
+  String owner,
+  String repo, {
+  CancelToken? cancelToken,
+}) {
+  return dioRequest.checkExists(
+    _repoStarPath(owner, repo),
+    cancelToken: cancelToken,
+  );
 }
 
 /// 为仓库点 Star（PUT `/user/starred/{owner}/{repo}`）

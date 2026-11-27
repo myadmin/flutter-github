@@ -1,9 +1,23 @@
+import 'dart:collection';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/utils/auth_session.dart';
 import 'package:gh_explorer/utils/api_exception.dart';
 import 'package:gh_explorer/utils/formatters.dart';
+
+class _EtagCacheEntry {
+  const _EtagCacheEntry({
+    required this.etag,
+    required this.data,
+    required this.hasNextPage,
+  });
+
+  final String etag;
+  final dynamic data;
+  final bool hasNextPage;
+}
 
 /// GitHub API 分页响应载体
 class PagedResponse {
@@ -52,6 +66,15 @@ class DioRequest {
   static ResourceRateLimitCallback? onResourceRateLimitUpdate;
 
   static const String _extraSkipAuthRedirect = 'skipAuthRedirect';
+  static const int _maxEtagCacheEntries = 120;
+
+  final LinkedHashMap<String, _EtagCacheEntry> _etagCache =
+      LinkedHashMap<String, _EtagCacheEntry>();
+
+  /// 清空内存中的 ETag 条件缓存（退出登录或测试隔离时调用）
+  void clearEtagCache() {
+    _etagCache.clear();
+  }
 
   DioRequest._internal() {
     _dio.options
@@ -171,6 +194,7 @@ class DioRequest {
 
     if (statusCode == 401) {
       if (!skipRedirect) {
+        clearEtagCache();
         await authTokenClearer?.call();
         onUnauthorized?.call();
         return NetworkException('GitHub 凭证已失效，请重新登录');
@@ -251,25 +275,88 @@ class DioRequest {
     return null;
   }
 
-  /// 通用 GET 请求
+  String _etagCacheKey(String kind, String url, Map<String, dynamic>? params) {
+    final token = authTokenReader?.call() ?? '';
+    final authTag = token.isEmpty
+        ? 'anon'
+        : '${token.length}:${token.hashCode}';
+    if (params == null || params.isEmpty) {
+      return '$authTag::$kind::$url';
+    }
+    final sortedKeys = params.keys.map((k) => k.toString()).toList()..sort();
+    final query = sortedKeys.map((k) => '$k=${params[k]}').join('&');
+    return '$authTag::$kind::$url?$query';
+  }
+
+  bool _canCacheWithEtag(String url, bool skipAuthRedirect, bool useEtagCache) {
+    if (!useEtagCache || skipAuthRedirect) return false;
+    return !url.startsWith(HttpConstants.rateLimit);
+  }
+
+  _EtagCacheEntry? _readEtagEntry(String key) {
+    final hit = _etagCache.remove(key);
+    if (hit != null) {
+      _etagCache[key] = hit;
+    }
+    return hit;
+  }
+
+  void _writeEtagEntry(
+    String key,
+    Headers responseHeaders, {
+    required dynamic data,
+    bool hasNextPage = false,
+  }) {
+    final etag = responseHeaders.value('etag')?.trim() ?? '';
+    if (etag.isEmpty) return;
+    _etagCache.remove(key);
+    _etagCache[key] = _EtagCacheEntry(
+      etag: etag,
+      data: data,
+      hasNextPage: hasNextPage,
+    );
+    while (_etagCache.length > _maxEtagCacheEntries) {
+      _etagCache.remove(_etagCache.keys.first);
+    }
+  }
+
+  /// 通用 GET 请求（默认支持基于 ETag / If-None-Match 的 304 零配额复用）
   Future<dynamic> get(
     String url, {
     Map<String, dynamic>? params,
     Map<String, dynamic>? headers,
     bool skipAuthRedirect = false,
     CancelToken? cancelToken,
+    bool useEtagCache = true,
   }) async {
+    final cacheable = _canCacheWithEtag(url, skipAuthRedirect, useEtagCache);
+    final key = cacheable ? _etagCacheKey('json', url, params) : '';
+    final cached = cacheable ? _readEtagEntry(key) : null;
+    final mergedHeaders = <String, dynamic>{...?headers};
+    if (cached != null && !mergedHeaders.containsKey('If-None-Match')) {
+      mergedHeaders['If-None-Match'] = cached.etag;
+    }
+
     final res = await _execute(
       () => _dio.get<dynamic>(
         url,
         queryParameters: params,
         cancelToken: cancelToken,
         options: Options(
-          headers: headers,
+          headers: mergedHeaders.isEmpty ? null : mergedHeaders,
+          validateStatus: cached != null
+              ? (s) => s != null && ((s >= 200 && s < 300) || s == 304)
+              : null,
           extra: {_extraSkipAuthRedirect: skipAuthRedirect},
         ),
       ),
     );
+    if (res.statusCode == 304 && cached != null) {
+      return cached.data;
+    }
+    if (cacheable) {
+      _writeEtagEntry(key, res.headers, data: res.data);
+    }
     return res.data;
   }
 
@@ -279,11 +366,13 @@ class DioRequest {
     Map<String, dynamic>? params,
     Map<String, dynamic>? headers,
     bool skipAuthRedirect = false,
+    CancelToken? cancelToken,
   }) {
     return _execute(
       () => _dio.get<dynamic>(
         url,
         queryParameters: params,
+        cancelToken: cancelToken,
         options: Options(
           headers: headers,
           extra: {_extraSkipAuthRedirect: skipAuthRedirect},
@@ -292,49 +381,93 @@ class DioRequest {
     );
   }
 
-  /// 面向列表分页的 GET 请求：自动解析 GitHub `Link` 头判定是否有下一页
+  /// 面向列表分页的 GET 请求：自动解析 GitHub `Link` 头判定是否有下一页并支持 ETag 304 复用
   Future<PagedResponse> getPaged(
     String url, {
     Map<String, dynamic>? params,
     int perPage = GlobalConstants.defaultPageSize,
     CancelToken? cancelToken,
+    bool useEtagCache = true,
   }) async {
+    final cacheable = _canCacheWithEtag(url, false, useEtagCache);
+    final key = cacheable ? _etagCacheKey('paged', url, params) : '';
+    final cached = cacheable ? _readEtagEntry(key) : null;
+    final headers = cached != null ? {'If-None-Match': cached.etag} : null;
+
     final res = await _execute(
       () => _dio.get<dynamic>(
         url,
         queryParameters: params,
         cancelToken: cancelToken,
+        options: cached != null
+            ? Options(
+                headers: headers,
+                validateStatus: (s) =>
+                    s != null && ((s >= 200 && s < 300) || s == 304),
+              )
+            : null,
       ),
     );
+    if (res.statusCode == 304 && cached != null) {
+      return PagedResponse(data: cached.data, hasNextPage: cached.hasNextPage);
+    }
     final linkHeader = res.headers.value('link');
     final hasLinkNext = parseHasNextPage(linkHeader);
     final data = res.data;
     final hasNext = linkHeader != null
         ? hasLinkNext
         : (data is List && data.length >= perPage);
+    if (cacheable) {
+      _writeEtagEntry(key, res.headers, data: data, hasNextPage: hasNext);
+    }
     return PagedResponse(data: data, hasNextPage: hasNext);
   }
 
-  /// 拉取原始文本内容（README / 源码文件）
-  Future<String> getRaw(String url, {Map<String, dynamic>? params}) async {
+  /// 拉取原始文本内容（README / 源码文件，支持 CancelToken 与 ETag 304 缓存）
+  Future<String> getRaw(
+    String url, {
+    Map<String, dynamic>? params,
+    CancelToken? cancelToken,
+    bool useEtagCache = true,
+  }) async {
+    final cacheable = _canCacheWithEtag(url, false, useEtagCache);
+    final key = cacheable ? _etagCacheKey('raw', url, params) : '';
+    final cached = cacheable ? _readEtagEntry(key) : null;
+    final headers = <String, dynamic>{
+      'Accept': 'application/vnd.github.raw+json',
+      if (cached != null) 'If-None-Match': cached.etag,
+    };
+
     final res = await _execute(
       () => _dio.get<String>(
         url,
         queryParameters: params,
+        cancelToken: cancelToken,
         options: Options(
           responseType: ResponseType.plain,
-          headers: const {'Accept': 'application/vnd.github.raw+json'},
+          headers: headers,
+          validateStatus: cached != null
+              ? (s) => s != null && ((s >= 200 && s < 300) || s == 304)
+              : null,
         ),
       ),
     );
-    return res.data ?? '';
+    if (res.statusCode == 304 && cached != null) {
+      return cached.data is String ? cached.data as String : '';
+    }
+    final text = res.data ?? '';
+    if (cacheable) {
+      _writeEtagEntry(key, res.headers, data: text);
+    }
+    return text;
   }
 
   /// 用于检查状态接口（如 `GET /user/starred/{owner}/{repo}`：`204` 为 true，`404` 为 false）
-  Future<bool> checkExists(String url) async {
+  Future<bool> checkExists(String url, {CancelToken? cancelToken}) async {
     final res = await _execute(
       () => _dio.get<dynamic>(
         url,
+        cancelToken: cancelToken,
         options: Options(
           validateStatus: (status) =>
               status != null &&
@@ -405,6 +538,9 @@ class DioRequest {
     try {
       return await task();
     } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) {
+        throw const RequestCancelledException();
+      }
       final cause = e.error;
       if (cause is Exception) throw cause;
       throw NetworkException(e.message ?? '网络连接异常，请检查网络');

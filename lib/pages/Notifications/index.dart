@@ -11,6 +11,7 @@ import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/event.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
+import 'package:gh_explorer/stores/notification_badge_store.dart';
 import 'package:gh_explorer/stores/user_controller.dart';
 import 'package:gh_explorer/utils/api_exception.dart';
 import 'package:gh_explorer/utils/formatters.dart';
@@ -36,12 +37,21 @@ class _NotificationsPageState extends State<NotificationsPage> {
   late final PagedListController<NotificationItem> _list =
       PagedListController<NotificationItem>(
         pageSize: GlobalConstants.defaultPageSize,
-        loader: (page) => getNotificationsAPI(
-          all: _showAll,
-          participating: _participatingOnly,
-          page: page,
-          cancelToken: _list.cancelToken,
-        ),
+        loader: (page) async {
+          final res = await getNotificationsAPI(
+            all: _showAll,
+            participating: _participatingOnly,
+            page: page,
+            cancelToken: _list.cancelToken,
+          );
+          if (!_showAll && !_participatingOnly && page == 1) {
+            final hasAnyUnread = res.items.any(
+              (n) => n.unread && !_locallyReadIds.contains(n.id),
+            );
+            NotificationBadgeStore.setUnread(hasAnyUnread);
+          }
+          return res;
+        },
         firstPageErrorFallback: '加载通知失败',
         onLoadMoreError: (msg) {
           if (mounted) ToastUtils.showToast(context, msg);
@@ -92,6 +102,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
   Future<void> _markAllRead() async {
     try {
       await markAllNotificationsReadAPI();
+      NotificationBadgeStore.setUnread(false);
       if (!mounted) return;
       ToastUtils.showToast(context, '已全部标为已读');
       await _list.refresh();
@@ -105,6 +116,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
   Future<void> _openNotification(NotificationItem item) async {
     if (item.unread && !_locallyReadIds.contains(item.id)) {
       setState(() => _locallyReadIds.add(item.id));
+      if (!_showAll && !_participatingOnly) {
+        final remainingUnread = _list.items.any(
+          (n) => n.unread && !_locallyReadIds.contains(n.id),
+        );
+        NotificationBadgeStore.setUnread(remainingUnread);
+      }
       try {
         await markNotificationReadAPI(item.id);
       } catch (_) {}

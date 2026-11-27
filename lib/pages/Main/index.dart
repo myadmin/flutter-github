@@ -9,6 +9,7 @@ import 'package:gh_explorer/pages/Mine/index.dart';
 import 'package:gh_explorer/pages/Search/index.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
 import 'package:gh_explorer/services/app_update_service.dart';
+import 'package:gh_explorer/stores/notification_badge_store.dart';
 import 'package:gh_explorer/stores/star_sync_controller.dart';
 import 'package:gh_explorer/stores/token_manager.dart';
 import 'package:gh_explorer/stores/user_controller.dart';
@@ -66,10 +67,11 @@ class _MainPageState extends State<MainPage> {
     super.initState();
     // 注册全局 401 凭证失效回调，统一清理用户态并引导重登
     DioRequest.onUnauthorized = _handleUnauthorized;
-    // 退出登录时同步清空跨页 Star 缓存
+    // 退出登录时同步清空跨页 Star 缓存与未读通知红点
     _userWatcher = ever(_userController.user, (user) {
       if (!user.isLoggedIn) {
         _starSyncController.clearAll();
+        NotificationBadgeStore.clear();
       }
     });
     _initUser().whenComplete(_checkAppUpdate);
@@ -171,13 +173,17 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-  /// 渲染底部导航图标：选中态附带胶囊高亮底色与放大尺寸，确保「搜索/动态」切换一目了然
-  Widget _buildTabIcon(IconData iconData, {required bool active}) {
+  /// 渲染底部导航图标：选中态附带胶囊高亮底色与放大尺寸，支持可选未读红点提示
+  Widget _buildTabIcon(
+    IconData iconData, {
+    required bool active,
+    bool allowUnreadDot = false,
+  }) {
     final colors = context.appColors;
     final activePillColor = colors.isDark
         ? colors.primary.withValues(alpha: 0.18)
         : colors.primarySurface;
-    return AnimatedContainer(
+    final pill = AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
       margin: const EdgeInsets.only(bottom: 2),
@@ -187,6 +193,32 @@ class _MainPageState extends State<MainPage> {
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Icon(iconData, size: active ? 22 : 21),
+    );
+    if (!allowUnreadDot) return pill;
+    return ValueListenableBuilder<bool>(
+      valueListenable: NotificationBadgeStore.hasUnread,
+      builder: (context, hasUnread, child) {
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            child!,
+            if (hasUnread)
+              Positioned(
+                right: 6,
+                top: 1,
+                child: Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: colors.badge,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+      child: pill,
     );
   }
 
@@ -233,11 +265,19 @@ class _MainPageState extends State<MainPage> {
               type: BottomNavigationBarType.fixed,
               onTap: _selectTab,
               items: [
-                for (final item in _tabList)
+                for (var i = 0; i < _tabList.length; i++)
                   BottomNavigationBarItem(
-                    icon: _buildTabIcon(item.icon, active: false),
-                    activeIcon: _buildTabIcon(item.activeIcon, active: true),
-                    label: item.label,
+                    icon: _buildTabIcon(
+                      _tabList[i].icon,
+                      active: false,
+                      allowUnreadDot: i == _feedTabIndex,
+                    ),
+                    activeIcon: _buildTabIcon(
+                      _tabList[i].activeIcon,
+                      active: true,
+                      allowUnreadDot: i == _feedTabIndex,
+                    ),
+                    label: _tabList[i].label,
                   ),
               ],
             ),

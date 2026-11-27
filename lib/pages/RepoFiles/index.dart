@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:gh_explorer/api/repo.dart';
 import 'package:gh_explorer/components/common/app_error_view.dart';
@@ -33,6 +34,7 @@ class _RepoFilesPageState extends State<RepoFilesPage> {
   List<RepoBranch> _branches = const [];
   late String _currentBranch;
   int _loadSeq = 0;
+  CancelToken? _loadToken;
   bool _isLoading = true;
   String _errorMessage = '';
 
@@ -41,6 +43,12 @@ class _RepoFilesPageState extends State<RepoFilesPage> {
     super.initState();
     _currentBranch = widget.branch;
     _load();
+  }
+
+  @override
+  void dispose() {
+    _loadToken?.cancel();
+    super.dispose();
   }
 
   /// 并发拉取当前目录文件列表与仓库分支列表
@@ -52,8 +60,11 @@ class _RepoFilesPageState extends State<RepoFilesPage> {
       });
       return;
     }
-    // 请求序号：快速切换分支时，只有最后一次请求的结果可以写回界面
+    // 请求序号 + CancelToken：快速切换分支或退出时取消在途请求
     final seq = ++_loadSeq;
+    _loadToken?.cancel();
+    final token = CancelToken();
+    _loadToken = token;
     setState(() {
       _isLoading = true;
       _errorMessage = '';
@@ -64,12 +75,14 @@ class _RepoFilesPageState extends State<RepoFilesPage> {
         widget.repoName,
         path: widget.path,
         ref: _currentBranch,
+        cancelToken: token,
       );
       // 首次进入时加载分支列表，切换分支后复用已拉取的分支选项
       final branchesFuture = _branches.isEmpty
           ? getAllRepoBranchesAPI(
               widget.owner,
               widget.repoName,
+              cancelToken: token,
             ).catchError((Object _) => const <RepoBranch>[])
           : Future<List<RepoBranch>>.value(_branches);
 
@@ -81,7 +94,7 @@ class _RepoFilesPageState extends State<RepoFilesPage> {
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted || seq != _loadSeq) return;
+      if (e is RequestCancelledException || !mounted || seq != _loadSeq) return;
       setState(() {
         _isLoading = false;
         _errorMessage = resolveErrorMessage(e, fallback: '加载目录内容失败');
@@ -148,6 +161,84 @@ class _RepoFilesPageState extends State<RepoFilesPage> {
     );
   }
 
+  /// 渲染目录层级面包屑（支持从深层子目录一键跳回任意上级目录）
+  Widget _buildBreadcrumbs() {
+    final segments = widget.path
+        .split('/')
+        .where((s) => s.trim().isNotEmpty)
+        .toList();
+    if (segments.isEmpty) return const SizedBox.shrink();
+
+    final colors = context.appColors;
+    return Container(
+      width: double.infinity,
+      color: colors.cardBackground,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            InkWell(
+              onTap: () => Navigator.pushNamed(
+                context,
+                AppRoutes.repoFiles(
+                  widget.owner,
+                  widget.repoName,
+                  ref: _currentBranch,
+                ),
+              ),
+              borderRadius: BorderRadius.circular(AppRadius.small),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Text(
+                  widget.repoName,
+                  style: context.captionStyle.copyWith(
+                    color: colors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            for (var i = 0; i < segments.length; i++) ...[
+              Text('/', style: context.captionStyle),
+              InkWell(
+                onTap: i == segments.length - 1
+                    ? null
+                    : () => Navigator.pushNamed(
+                        context,
+                        AppRoutes.repoFiles(
+                          widget.owner,
+                          widget.repoName,
+                          ref: _currentBranch,
+                          path: segments.sublist(0, i + 1).join('/'),
+                        ),
+                      ),
+                borderRadius: BorderRadius.circular(AppRadius.small),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  child: Text(
+                    segments[i],
+                    style: context.captionStyle.copyWith(
+                      color: i == segments.length - 1
+                          ? colors.textPrimary
+                          : colors.primary,
+                      fontWeight: i == segments.length - 1
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -156,76 +247,93 @@ class _RepoFilesPageState extends State<RepoFilesPage> {
       return AppErrorView(message: _errorMessage, onRetry: _load);
     }
     if (_items.isEmpty) {
-      return const HmEmptyView(icon: Icons.folder_open, title: '目录为空');
+      return Column(
+        children: [
+          _buildBreadcrumbs(),
+          const Expanded(
+            child: HmEmptyView(icon: Icons.folder_open, title: '目录为空'),
+          ),
+        ],
+      );
     }
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(
           maxWidth: HmBottomBar.maxContentWidth,
         ),
-        child: RefreshIndicator(
-          onRefresh: _load,
-          child: ListView.separated(
-            padding: const EdgeInsets.all(12),
-            itemCount: _items.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 6),
-            itemBuilder: (context, index) {
-              final item = _items[index];
-              return Material(
-                color: context.appColors.cardBackground,
-                borderRadius: BorderRadius.circular(AppRadius.small),
-                child: ListTile(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.small),
-                    side: BorderSide(
-                      color: context.appColors.divider.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  leading: Icon(
-                    item.isDir
-                        ? Icons.folder
-                        : Icons.insert_drive_file_outlined,
-                    color: item.isDir
-                        ? context.appColors.primary
-                        : context.appColors.textSecondary,
-                  ),
-                  title: Text(item.name, style: context.bodyStyle),
-                  trailing: item.isDir
-                      ? Icon(
-                          Icons.chevron_right,
-                          color: context.appColors.textSecondary,
-                        )
-                      : Text(
-                          _formatSize(item.size),
-                          style: context.captionSmallStyle,
+        child: Column(
+          children: [
+            _buildBreadcrumbs(),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _load,
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: _items.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 6),
+                  itemBuilder: (context, index) {
+                    final item = _items[index];
+                    return Material(
+                      color: context.appColors.cardBackground,
+                      borderRadius: BorderRadius.circular(AppRadius.small),
+                      child: ListTile(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.small),
+                          side: BorderSide(
+                            color: context.appColors.divider.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
                         ),
-                  onTap: () {
-                    if (item.isDir) {
-                      Navigator.pushNamed(
-                        context,
-                        AppRoutes.repoFiles(
-                          widget.owner,
-                          widget.repoName,
-                          ref: _currentBranch,
-                          path: item.path,
+                        leading: Icon(
+                          item.isDir
+                              ? Icons.folder
+                              : Icons.insert_drive_file_outlined,
+                          color: item.isDir
+                              ? context.appColors.primary
+                              : context.appColors.textSecondary,
                         ),
-                      );
-                    } else {
-                      Navigator.pushNamed(
-                        context,
-                        AppRoutes.repoFileView(
-                          widget.owner,
-                          widget.repoName,
-                          path: item.path,
-                          ref: _currentBranch,
-                        ),
-                      );
-                    }
+                        title: Text(item.name, style: context.bodyStyle),
+                        trailing: item.isDir
+                            ? Icon(
+                                Icons.chevron_right,
+                                color: context.appColors.textSecondary,
+                              )
+                            : Text(
+                                _formatSize(item.size),
+                                style: context.captionSmallStyle,
+                              ),
+                        onTap: () {
+                          if (item.isDir) {
+                            Navigator.pushNamed(
+                              context,
+                              AppRoutes.repoFiles(
+                                widget.owner,
+                                widget.repoName,
+                                ref: _currentBranch,
+                                path: item.path,
+                              ),
+                            );
+                          } else {
+                            Navigator.pushNamed(
+                              context,
+                              AppRoutes.repoFileView(
+                                widget.owner,
+                                widget.repoName,
+                                path: item.path,
+                                ref: _currentBranch,
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    );
                   },
                 ),
-              );
-            },
-          ),
+              ),
+            ),
+          ],
         ),
       ),
     );

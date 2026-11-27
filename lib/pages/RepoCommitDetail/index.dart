@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gh_explorer/api/repo.dart';
@@ -37,6 +38,8 @@ class _RepoCommitDetailPageState extends State<RepoCommitDetailPage> {
   bool _isLoading = true;
   String _errorMessage = '';
   bool _expandAll = true;
+  int _loadSeq = 0;
+  CancelToken? _loadToken;
 
   bool get _hasValidArgs =>
       widget.owner.trim().isNotEmpty &&
@@ -56,7 +59,17 @@ class _RepoCommitDetailPageState extends State<RepoCommitDetailPage> {
     }
   }
 
+  @override
+  void dispose() {
+    _loadToken?.cancel();
+    super.dispose();
+  }
+
   Future<void> _load() async {
+    final seq = ++_loadSeq;
+    _loadToken?.cancel();
+    final token = CancelToken();
+    _loadToken = token;
     setState(() {
       _isLoading = _detail == null;
       _errorMessage = '';
@@ -66,15 +79,16 @@ class _RepoCommitDetailPageState extends State<RepoCommitDetailPage> {
         widget.owner,
         widget.repoName,
         widget.sha,
+        cancelToken: token,
       );
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
       setState(() {
         _detail = detail;
         _expandAll = detail.files.length <= 15;
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (e is RequestCancelledException || !mounted || seq != _loadSeq) return;
       setState(() {
         _isLoading = false;
         _errorMessage = resolveErrorMessage(e, fallback: '加载提交详情失败');

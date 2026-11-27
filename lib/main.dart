@@ -20,6 +20,8 @@ import 'package:gh_explorer/utils/web_url_strategy.dart';
 Future<void> main(List<String> args) async {
   // 插件（如 SharedPreferences）依赖 Flutter Binding，必须在 runApp 前初始化
   WidgetsFlutterBinding.ensureInitialized();
+  // 适度放宽图片内存缓存上限，减少列表与头像回滑时的重复解码
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 100 << 20;
   // Web 端启用真实路径策略（/repo?...），非 Web 平台为空实现
   configureWebUrlStrategy();
 
