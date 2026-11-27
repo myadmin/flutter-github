@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:gh_explorer/api/issue.dart';
 import 'package:gh_explorer/components/common/hm_bottom_bar.dart';
 import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/models/issue.dart';
+import 'package:gh_explorer/routes/app_routes.dart';
+import 'package:gh_explorer/stores/user_controller.dart';
 import 'package:gh_explorer/utils/api_exception.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
 
@@ -56,6 +59,15 @@ class _RepoIssueCreatePageState extends State<RepoIssueCreatePage> {
 
   Future<void> _submit() async {
     if (_submitting) return;
+    // 深链可直接进入本页，提交前再校验一次登录态，避免无谓的 401 请求
+    final userCtrl = Get.isRegistered<UserController>()
+        ? Get.find<UserController>()
+        : null;
+    if (userCtrl != null && !userCtrl.isLoggedIn) {
+      ToastUtils.showToast(context, '登录后即可新建 Issue');
+      await Navigator.pushNamed(context, AppRoutes.login);
+      if (!mounted || !userCtrl.isLoggedIn) return;
+    }
     if (_formKey.currentState?.validate() != true) return;
     setState(() => _submitting = true);
     try {
@@ -124,6 +136,8 @@ class _RepoIssueCreatePageState extends State<RepoIssueCreatePage> {
                     TextFormField(
                       controller: _titleController,
                       textInputAction: TextInputAction.next,
+                      // GitHub Issue 标题硬上限 256 字符，超长会被 API 直接拒绝
+                      maxLength: 256,
                       validator: (v) => (v == null || v.trim().isEmpty)
                           ? '请输入 Issue 标题'
                           : null,

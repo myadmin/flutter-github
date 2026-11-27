@@ -95,6 +95,7 @@ void main() {
     controllers.user.updateUserInfo(GithubUser.fromJson(userJson()));
     var merged = false;
     var issueState = 'open';
+    String? mergeRequestSha;
 
     installMock((options) {
       if (options.path == '/repos/flutter/flutter/issues' &&
@@ -170,6 +171,10 @@ void main() {
         ]);
       }
       if (options.path == '/repos/flutter/flutter/pulls/88/merge') {
+        final data = options.data;
+        if (data is Map) {
+          mergeRequestSha = data['sha']?.toString();
+        }
         merged = true;
         return jsonResponse({
           'merged': true,
@@ -275,6 +280,8 @@ void main() {
     await tester.tap(find.text('确认合并'));
     await tester.pumpAndSettle();
     expect(find.text('Merged'), findsOneWidget);
+    // 合并必须携带审阅时的 head sha，防止审阅后新提交被一并合并
+    expect(mergeRequestSha, 'abc999');
   });
 
   testWidgets('RepoDetailPage 支持 Clone 复制、Releases、社区页与分支 README 切换', (
@@ -518,7 +525,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('清空浏览足迹'));
     await tester.pumpAndSettle();
+    // 清理前有二次确认弹窗
+    await tester.tap(find.text('确认清空'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('清空搜索历史'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确认清空'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('清除首页推荐缓存'));
     await tester.pumpAndSettle();

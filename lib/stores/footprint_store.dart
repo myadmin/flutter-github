@@ -11,6 +11,9 @@ class FootprintStore {
 
   static const int maxItems = 50;
 
+  /// 足迹版本号：写入 / 清空后自增，Explore 等常驻页面据此刷新“继续浏览”
+  static final ValueNotifier<int> revision = ValueNotifier<int>(0);
+
   static Future<List<FootprintItem>> load() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(GlobalConstants.footprintKey);
@@ -80,11 +83,13 @@ class FootprintStore {
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(GlobalConstants.footprintKey);
+    revision.value++;
   }
 
   static Future<void> _save(List<FootprintItem> items) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = jsonEncode(items.map((item) => item.toJson()).toList());
     await prefs.setString(GlobalConstants.footprintKey, raw);
+    revision.value++;
   }
 }

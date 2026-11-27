@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 /// 将数字格式化为紧凑显示（例如 `1234 -> 1.2k`、`1500000 -> 1.5m`）
 String formatCompactNumber(int value) {
   if (value < 0) return '0';
@@ -36,18 +34,6 @@ String formatRelativeTime(DateTime? dateTime, {DateTime? now}) {
     return '$month-$day';
   }
   return '${local.year}-$month-$day';
-}
-
-/// 解码 GitHub API 返回的带换行的 Base64 文本
-String decodeBase64Text(String encoded) {
-  if (encoded.isEmpty) return '';
-  final normalized = encoded.replaceAll(RegExp(r'\s+'), '');
-  try {
-    final bytes = base64Decode(normalized);
-    return utf8.decode(bytes, allowMalformed: true);
-  } on FormatException {
-    return encoded;
-  }
 }
 
 /// 从 GitHub `Link` 响应头中判断是否还有下一页（`rel="next"`）

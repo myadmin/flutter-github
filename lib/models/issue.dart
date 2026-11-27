@@ -109,6 +109,9 @@ class IssueItem {
   }
 
   /// 从 `/pulls` 列表元素构造条目标记 `isPullRequest = true`
+  ///
+  /// 评论数口径与 Issue 保持一致，仅统计 issue comments；review comments
+  /// 属于代码评审，不并入「评论」，否则与详情页数字不一致。
   factory IssueItem.fromPullRequestJson(Map<String, dynamic> json) {
     return IssueItem(
       id: asInt(json['id']),
@@ -116,7 +119,7 @@ class IssueItem {
       title: asString(json['title']),
       body: asString(json['body']),
       state: asString(json['state'], fallback: 'open'),
-      commentsCount: asInt(json['comments']) + asInt(json['review_comments']),
+      commentsCount: asInt(json['comments']),
       isPullRequest: true,
       isMerged: asDateTime(json['merged_at']) != null,
       htmlUrl: asString(json['html_url']),

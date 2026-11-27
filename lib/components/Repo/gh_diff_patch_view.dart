@@ -32,6 +32,10 @@ class _GhDiffFileCardState extends State<GhDiffFileCard> {
     _expanded = widget.initiallyExpanded;
   }
 
+  /// 单卡默认最多渲染的 diff 行数，避免超大 patch 首帧构建数万 widget
+  static const int _maxPreviewLines = 400;
+  bool _showAllLines = false;
+
   @override
   void didUpdateWidget(covariant GhDiffFileCard oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -63,6 +67,26 @@ class _GhDiffFileCardState extends State<GhDiffFileCard> {
       return DiffLineKind.removed;
     }
     return DiffLineKind.context;
+  }
+
+  /// 逐行判定类型：只有出现在首个 `@@` 之前的 `---` / `+++` 才是文件头，
+  /// hunk 之后以 `---` 开头的是被删除的内容行，不能当成文件头丢掉染色。
+  List<DiffLineKind> _classifyPatch(List<String> lines) {
+    final kinds = <DiffLineKind>[];
+    var sawHunk = false;
+    for (final line in lines) {
+      if (line.startsWith('@@')) {
+        sawHunk = true;
+        kinds.add(DiffLineKind.hunk);
+        continue;
+      }
+      if (!sawHunk && (line.startsWith('--- ') || line.startsWith('+++ '))) {
+        kinds.add(DiffLineKind.context);
+        continue;
+      }
+      kinds.add(_classifyLine(line));
+    }
+    return kinds;
   }
 
   @override
@@ -178,7 +202,14 @@ class _GhDiffFileCardState extends State<GhDiffFileCard> {
         child: Text('二进制文件或变更过大，暂未返回文本 Diff', style: context.captionStyle),
       );
     }
-    final lines = patch.replaceAll('\r\n', '\n').split('\n');
+    final lines = patch
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .split('\n');
+    final kinds = _classifyPatch(lines);
+    final visibleCount = _showAllLines || lines.length <= _maxPreviewLines
+        ? lines.length
+        : _maxPreviewLines;
     return Container(
       decoration: BoxDecoration(
         border: Border(
@@ -197,7 +228,16 @@ class _GhDiffFileCardState extends State<GhDiffFileCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final line in lines) _buildDiffLine(context, line),
+                  for (var i = 0; i < visibleCount; i++)
+                    _buildDiffLine(context, lines[i], kinds[i]),
+                  if (visibleCount < lines.length)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: TextButton(
+                        onPressed: () => setState(() => _showAllLines = true),
+                        child: Text('展开全部 ${lines.length} 行'),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -207,9 +247,8 @@ class _GhDiffFileCardState extends State<GhDiffFileCard> {
     );
   }
 
-  Widget _buildDiffLine(BuildContext context, String line) {
+  Widget _buildDiffLine(BuildContext context, String line, DiffLineKind kind) {
     final colors = context.appColors;
-    final kind = _classifyLine(line);
     Color? bgColor;
     Color textColor = colors.textPrimary;
     FontWeight fontWeight = FontWeight.w400;

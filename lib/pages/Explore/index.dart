@@ -105,15 +105,23 @@ class _ExploreViewState extends State<ExploreView> {
     ], (_) => _syncSelectedLanguageWithTags());
     unawaited(_tagsController.ensureLoaded());
     _loadRecentFootprints();
+    // 足迹在其他页面被写入/清空时同步刷新「继续浏览」，避免展示过期数据
+    FootprintStore.revision.addListener(_onFootprintChanged);
     _loadInitialHomeData();
   }
 
   @override
   void dispose() {
+    FootprintStore.revision.removeListener(_onFootprintChanged);
     _tagsWatcher.dispose();
     _scrollController.dispose();
     _list.dispose();
     super.dispose();
+  }
+
+  void _onFootprintChanged() {
+    if (!mounted) return;
+    unawaited(_loadRecentFootprints());
   }
 
   /// 当用户在设置页移除了当前正在浏览的顶部标签时，自动切回「全部」或首个可用标签并刷新

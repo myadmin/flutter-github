@@ -464,20 +464,20 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
             );
           }
           final item = _list[index];
-          return _IssueCard(
-            item: item,
-            onTap: () => Navigator.pushNamed(
-              context,
-              AppRoutes.repoIssueDetail(
-                widget.owner,
-                widget.repoName,
-                item.number,
-              ),
-            ),
-          );
+          return _IssueCard(item: item, onTap: () => _openIssueDetail(item));
         },
       ),
     );
+  }
+
+  /// 打开 Issue / PR 详情；返回后刷新当前列表，避免关闭、编辑、合并后状态陈旧
+  Future<void> _openIssueDetail(IssueItem item) async {
+    await Navigator.pushNamed(
+      context,
+      AppRoutes.repoIssueDetail(widget.owner, widget.repoName, item.number),
+    );
+    if (!mounted) return;
+    await _list.refresh();
   }
 }
 

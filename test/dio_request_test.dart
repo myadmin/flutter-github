@@ -160,6 +160,34 @@ void main() {
     );
   });
 
+  test('409/405 冲突类错误返回可操作的中文提示并保留状态码', () async {
+    var statusCode = 409;
+    installMock((options) {
+      return jsonResponse({
+        'message': 'Head branch was modified. Review and try the merge again.',
+      }, statusCode: statusCode);
+    });
+
+    await expectLater(
+      () => dioRequest.put('/repos/flutter/flutter/pulls/88/merge', data: {}),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.code, 'code', '409')
+            .having((e) => e.message, 'message', contains('PR 状态已变更')),
+      ),
+    );
+
+    statusCode = 405;
+    await expectLater(
+      () => dioRequest.put('/repos/flutter/flutter/pulls/88/merge', data: {}),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.code, 'code', '405')
+            .having((e) => e.message, 'message', contains('该操作暂不被允许')),
+      ),
+    );
+  });
+
   test('search 接口速率限制不会覆盖 core 配额，onResourceRateLimitUpdate 区分资源域', () async {
     int? coreLimit;
     final recorded = <(String, int, int)>[];

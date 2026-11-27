@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/models/event.dart';
@@ -56,9 +54,6 @@ void main() {
       formatRelativeTime(now.subtract(const Duration(days: 5)), now: now),
       '5 天前',
     );
-
-    final b64 = base64Encode(utf8.encode('hello\nworld'));
-    expect(decodeBase64Text('$b64\n'), 'hello\nworld');
 
     expect(parseHasNextPage('<url>; rel="next"'), isTrue);
     expect(parseHasNextPage('<url>; rel="prev"'), isFalse);

@@ -201,6 +201,11 @@ class DioRequest {
     if (data is Map && data['message'] != null) {
       final rawMsg = data['message'].toString();
       final lowerMsg = rawMsg.toLowerCase();
+      if (statusCode == 405 || statusCode == 409) {
+        // 405：PR 不可合并 / 分支保护拦截；409：head 已变更或存在冲突
+        final reason = statusCode == 409 ? 'PR 状态已变更' : '该操作暂不被允许';
+        return ApiException('$reason，请刷新后重试：$rawMsg', code: '$statusCode');
+      }
       if (statusCode == 404) {
         return ApiException('请求的仓库或用户不存在', code: '404');
       }

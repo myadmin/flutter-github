@@ -89,10 +89,12 @@ Future<List<RepoBranch>> getRepoBranchesAPI(
   String repo, {
   int page = 1,
   int perPage = 50,
+  CancelToken? cancelToken,
 }) async {
   final data = await dioRequest.get(
     '${_repoBase(owner, repo)}/branches',
     params: {'page': page, 'per_page': perPage},
+    cancelToken: cancelToken,
   );
   return asModelList(data, RepoBranch.fromJson);
 }
@@ -105,6 +107,7 @@ Future<List<RepoBranch>> getAllRepoBranchesAPI(
   String repo, {
   int perPage = 100,
   int maxPages = 4,
+  CancelToken? cancelToken,
 }) async {
   final branches = <RepoBranch>[];
   for (var page = 1; page <= maxPages; page++) {
@@ -113,6 +116,7 @@ Future<List<RepoBranch>> getAllRepoBranchesAPI(
       repo,
       page: page,
       perPage: perPage,
+      cancelToken: cancelToken,
     );
     branches.addAll(batch);
     if (batch.length < perPage) break;

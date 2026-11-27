@@ -60,6 +60,8 @@ String buildRepoIssueSearchQuery({
   if (RegExp(r'^#\d+$').hasMatch(cleanKeyword)) {
     cleanKeyword = cleanKeyword.substring(1);
   }
+  // 关键词一律降级为字面量短语，因此状态只能由 UI 的 Open/Closed/All 决定，
+  // 不再识别关键词中的 `is:open` / `is:closed`（否则会出现“筛选 Closed 却返回 Open”）
   cleanKeyword = _escapeRepoIssueKeyword(cleanKeyword);
 
   final parts = <String>[
@@ -70,15 +72,10 @@ String buildRepoIssueSearchQuery({
   } else if (kind == IssueKindFilter.pr) {
     parts.add('is:pr');
   }
-  final lower = cleanKeyword.toLowerCase();
-  final hasExplicitState =
-      lower.contains('is:open') || lower.contains('is:closed');
-  if (!hasExplicitState) {
-    if (state == 'open') {
-      parts.add('is:open');
-    } else if (state == 'closed') {
-      parts.add('is:closed');
-    }
+  if (state == 'open') {
+    parts.add('is:open');
+  } else if (state == 'closed') {
+    parts.add('is:closed');
   }
   if (cleanKeyword.isNotEmpty) {
     parts.add(cleanKeyword);
@@ -113,9 +110,10 @@ Future<PageResult<IssueItem>> searchRepoIssuesAPI(
     ),
   );
   final totalCount = asInt(raw['total_count']);
-  onTotalCount?.call(totalCount);
-  final items = asList(raw['items'], IssueItem.fromJson);
+  // GitHub Search 最多只能翻到 1000 条，总数与分页能力保持一致
   final cappedTotal = math.min(totalCount, 1000);
+  onTotalCount?.call(cappedTotal);
+  final items = asList(raw['items'], IssueItem.fromJson);
   final hasMore = page * perPage < cappedTotal && items.isNotEmpty;
   return PageResult<IssueItem>(items: items, page: page, hasMore: hasMore);
 }
@@ -303,12 +301,16 @@ Future<PageResult<CommitFileChange>> getPullRequestFilesAPI(
 }
 
 /// 合并指定 Pull Request（`mergeMethod`: `merge` / `squash` / `rebase`）
+///
+/// `sha` 为调用方审阅过的 head 提交，GitHub 会拒绝与当前 head 不一致的合并请求，
+/// 避免用户审完 diff 后分支又被推送新提交、却把未经审阅的代码合入。
 Future<({bool merged, String message})> mergePullRequestAPI(
   String owner,
   String repo,
   int number, {
   String mergeMethod = 'merge',
   String commitTitle = '',
+  String sha = '',
 }) async {
   final data = asMap(
     await dioRequest.put(
@@ -316,6 +318,7 @@ Future<({bool merged, String message})> mergePullRequestAPI(
       data: {
         'merge_method': mergeMethod,
         if (commitTitle.trim().isNotEmpty) 'commit_title': commitTitle.trim(),
+        if (sha.trim().isNotEmpty) 'sha': sha.trim(),
       },
     ),
   );

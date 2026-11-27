@@ -150,7 +150,22 @@ class GhMarkdownView extends StatelessWidget {
               child: InteractiveViewer(
                 minScale: 0.5,
                 maxScale: 4,
-                child: Image.network(imageUrl, fit: BoxFit.contain),
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  // 预览按屏幕宽度解码，避免长图按原始分辨率占用内存
+                  cacheWidth:
+                      (MediaQuery.sizeOf(context).width *
+                              MediaQuery.devicePixelRatioOf(context))
+                          .round(),
+                  errorBuilder: (ctx, _, _) => const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      '图片加载失败',
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ),
+                ),
               ),
             ),
             Positioned(

@@ -600,6 +600,31 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  /// 破坏性清理前的二次确认，避免误触丢失本地数据
+  Future<bool> _confirmClear({
+    required String title,
+    required String message,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('确认清空'),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
   Widget _buildCacheCard() {
     final colors = context.appColors;
     return _buildCard(
@@ -637,6 +662,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 color: colors.textSecondary,
               ),
               onTap: () async {
+                if (!await _confirmClear(
+                  title: '清空浏览足迹',
+                  message: '将删除本机保存的全部浏览记录，且无法恢复。',
+                )) {
+                  return;
+                }
                 await FootprintStore.clear();
                 if (mounted) ToastUtils.showToast(context, '已清空本地浏览足迹');
               },
@@ -657,6 +688,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 color: colors.textSecondary,
               ),
               onTap: () async {
+                if (!await _confirmClear(
+                  title: '清空搜索历史',
+                  message: '将删除本机保存的全部搜索关键词，且无法恢复。',
+                )) {
+                  return;
+                }
                 await SearchHistoryStore.clear();
                 if (mounted) ToastUtils.showToast(context, '已清空本地搜索历史');
               },

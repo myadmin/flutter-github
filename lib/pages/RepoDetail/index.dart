@@ -49,6 +49,9 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
   String _selectedBranch = '';
   List<RepoBranch> _branches = const [];
   bool _readmeLoading = false;
+
+  /// 分支切换 / 整页刷新的请求代际，用于丢弃过期分支的 README 响应
+  int _branchSeq = 0;
   bool _isStarred = false;
   bool _isLoading = true;
   String _errorMessage = '';
@@ -106,6 +109,8 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
   /// 并发拉取仓库元数据、README 与 Star 状态，并在成功后写入本地足迹
   Future<void> _load() async {
     if (!mounted) return;
+    // 整页刷新同样推进代际，保证在途的分支切换响应不会覆盖最新结果
+    final seq = ++_branchSeq;
     setState(() {
       _isLoading = _repo == null;
       _errorMessage = '';
@@ -138,7 +143,7 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
         branchesFuture,
       ).wait;
 
-      if (!mounted) return;
+      if (!mounted || seq != _branchSeq) return;
       _starSync.setSnapshot(
         repo.fullName,
         isStarred: starred,
@@ -157,7 +162,7 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _branchSeq) return;
       setState(() {
         _isLoading = false;
         _errorMessage = resolveErrorMessage(e, fallback: '仓库信息加载失败');
@@ -168,6 +173,7 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
   /// 切换展示分支并同步刷新该分支的 README
   Future<void> _switchBranch(String branch) async {
     if (branch == _effectiveBranch) return;
+    final seq = ++_branchSeq;
     setState(() {
       _selectedBranch = branch;
       _readmeLoading = true;
@@ -178,13 +184,16 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
         widget.repoName,
         ref: branch,
       ).catchError((Object _) => '');
-      if (!mounted) return;
+      // 快速连续切换分支时，只接受最后一次切换的响应
+      if (!mounted || seq != _branchSeq) return;
       setState(() {
         _readme = readme;
         _readmeLoading = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _readmeLoading = false);
+      if (mounted && seq == _branchSeq) {
+        setState(() => _readmeLoading = false);
+      }
     }
   }
 
