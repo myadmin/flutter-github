@@ -44,20 +44,20 @@ jobs:
       HAS_ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # 拉取完整提交与标签历史，便于自动生成两个 Release 之间的更新日志
           fetch-depth: 0
 
       - name: Set up JDK 17
         # AGP 9.1.0 / Kotlin 2.4 要求 JDK 17，显式固定 Runner Java 版本
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Gradle cache
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -148,7 +148,7 @@ jobs:
           "$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | head -3
 
       - name: Upload Android artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gh-explorer-android
           path: |
@@ -176,13 +176,13 @@ jobs:
       HAS_ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # 拉取完整提交与标签历史，便于自动生成两个 Release 之间的更新日志
           fetch-depth: 0
 
       - name: Download Android artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: gh-explorer-android
           path: dist
