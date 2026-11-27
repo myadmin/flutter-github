@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/pages/Footprint/index.dart';
@@ -7,12 +8,16 @@ import 'package:gh_explorer/pages/Main/index.dart';
 import 'package:gh_explorer/pages/MyRepos/index.dart';
 import 'package:gh_explorer/pages/MyStars/index.dart';
 import 'package:gh_explorer/pages/Notifications/index.dart';
+import 'package:gh_explorer/pages/RepoCommitDetail/index.dart';
 import 'package:gh_explorer/pages/RepoCommits/index.dart';
 import 'package:gh_explorer/pages/RepoDetail/index.dart';
 import 'package:gh_explorer/pages/RepoFileView/index.dart';
 import 'package:gh_explorer/pages/RepoFiles/index.dart';
+import 'package:gh_explorer/pages/RepoIssueCreate/index.dart';
 import 'package:gh_explorer/pages/RepoIssueDetail/index.dart';
 import 'package:gh_explorer/pages/RepoIssues/index.dart';
+import 'package:gh_explorer/pages/RepoPeople/index.dart';
+import 'package:gh_explorer/pages/RepoReleases/index.dart';
 import 'package:gh_explorer/pages/Settings/index.dart';
 import 'package:gh_explorer/pages/Unknown/index.dart';
 import 'package:gh_explorer/pages/UserDetail/index.dart';
@@ -114,6 +119,9 @@ ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
       foregroundColor: palette.textPrimary,
       elevation: 0,
       surfaceTintColor: Colors.transparent,
+      systemOverlayStyle: isDark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: palette.cardBackground,
@@ -240,6 +248,17 @@ Map<String, Widget Function(BuildContext)> getRootRoutes() {
         ),
       );
     },
+    AppRoutes.repoIssueCreatePath: (context) {
+      final p = _readParams(context);
+      return _guardedRoute(
+        p,
+        const ['owner', 'name'],
+        (params) => RepoIssueCreatePage(
+          owner: params['owner']!,
+          repoName: params['name']!,
+        ),
+      );
+    },
     AppRoutes.repoCommitsPath: (context) {
       final p = _readParams(context);
       return _guardedRoute(
@@ -249,6 +268,41 @@ Map<String, Widget Function(BuildContext)> getRootRoutes() {
           owner: params['owner']!,
           repoName: params['name']!,
           branch: params['branch'] ?? '',
+        ),
+      );
+    },
+    AppRoutes.repoCommitDetailPath: (context) {
+      final p = _readParams(context);
+      return _guardedRoute(
+        p,
+        const ['owner', 'name', 'sha'],
+        (params) => RepoCommitDetailPage(
+          owner: params['owner']!,
+          repoName: params['name']!,
+          sha: params['sha']!,
+        ),
+      );
+    },
+    AppRoutes.repoReleasesPath: (context) {
+      final p = _readParams(context);
+      return _guardedRoute(
+        p,
+        const ['owner', 'name'],
+        (params) => RepoReleasesPage(
+          owner: params['owner']!,
+          repoName: params['name']!,
+        ),
+      );
+    },
+    AppRoutes.repoCommunityPath: (context) {
+      final p = _readParams(context);
+      return _guardedRoute(
+        p,
+        const ['owner', 'name'],
+        (params) => RepoCommunityPage(
+          owner: params['owner']!,
+          repoName: params['name']!,
+          initialTab: p['tab'] ?? 'stargazers',
         ),
       );
     },

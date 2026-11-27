@@ -12,7 +12,11 @@ class AppRoutes {
   static const String repoFileViewPath = '/repo/blob';
   static const String repoIssuesPath = '/repo/issues';
   static const String repoIssueDetailPath = '/repo/issue';
+  static const String repoIssueCreatePath = '/repo/issue/new';
   static const String repoCommitsPath = '/repo/commits';
+  static const String repoCommitDetailPath = '/repo/commit';
+  static const String repoReleasesPath = '/repo/releases';
+  static const String repoCommunityPath = '/repo/community';
   static const String userDetailPath = '/user';
   static const String userFollowsPath = '/user/follows';
   static const String myReposPath = '/my/repos';
@@ -68,11 +72,37 @@ class AppRoutes {
       '&name=${Uri.encodeQueryComponent(name)}'
       '&number=$number';
 
+  /// 新建 Issue：`/repo/issue/new?owner=&name=`
+  static String repoIssueCreate(String owner, String name) =>
+      '$repoIssueCreatePath?owner=${Uri.encodeQueryComponent(owner)}'
+      '&name=${Uri.encodeQueryComponent(name)}';
+
   /// Commit 历史：`/repo/commits?owner=&name=&branch=`
   static String repoCommits(String owner, String name, {String branch = ''}) =>
       '$repoCommitsPath?owner=${Uri.encodeQueryComponent(owner)}'
       '&name=${Uri.encodeQueryComponent(name)}'
       '${branch.isEmpty ? '' : '&branch=${Uri.encodeQueryComponent(branch)}'}';
+
+  /// Commit 详情：`/repo/commit?owner=&name=&sha=`
+  static String repoCommitDetail(String owner, String name, String sha) =>
+      '$repoCommitDetailPath?owner=${Uri.encodeQueryComponent(owner)}'
+      '&name=${Uri.encodeQueryComponent(name)}'
+      '&sha=${Uri.encodeQueryComponent(sha)}';
+
+  /// 仓库 Releases：`/repo/releases?owner=&name=`
+  static String repoReleases(String owner, String name) =>
+      '$repoReleasesPath?owner=${Uri.encodeQueryComponent(owner)}'
+      '&name=${Uri.encodeQueryComponent(name)}';
+
+  /// 仓库社区（Stargazers / Contributors / Forks）：`/repo/community?owner=&name=&tab=`
+  static String repoCommunity(
+    String owner,
+    String name, {
+    String tab = 'stargazers',
+  }) =>
+      '$repoCommunityPath?owner=${Uri.encodeQueryComponent(owner)}'
+      '&name=${Uri.encodeQueryComponent(name)}'
+      '&tab=${Uri.encodeQueryComponent(tab)}';
 
   /// 用户 / 组织详情：`/user?login=<login>`
   static String userDetail(String login) =>

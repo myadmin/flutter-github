@@ -76,6 +76,8 @@ class RepoItem {
     required this.owner,
     this.license,
     this.parentFullName = '',
+    this.cloneUrl = '',
+    this.sshUrl = '',
     this.createdAt,
     this.updatedAt,
     this.pushedAt,
@@ -101,6 +103,8 @@ class RepoItem {
   final RepoOwner owner;
   final RepoLicense? license;
   final String parentFullName;
+  final String cloneUrl;
+  final String sshUrl;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? pushedAt;
@@ -117,6 +121,24 @@ class RepoItem {
     if (name.isNotEmpty) return name;
     final parts = fullName.split('/');
     return parts.length >= 2 ? parts[1] : '';
+  }
+
+  /// HTTPS Clone 地址（字段缺失时按 owner/repo 兜底拼接）
+  String get effectiveCloneUrl {
+    if (cloneUrl.isNotEmpty) return cloneUrl;
+    if (ownerLogin.isNotEmpty && repoName.isNotEmpty) {
+      return 'https://github.com/$ownerLogin/$repoName.git';
+    }
+    return '';
+  }
+
+  /// SSH Clone 地址（字段缺失时按 owner/repo 兜底拼接）
+  String get effectiveSshUrl {
+    if (sshUrl.isNotEmpty) return sshUrl;
+    if (ownerLogin.isNotEmpty && repoName.isNotEmpty) {
+      return 'git@github.com:$ownerLogin/$repoName.git';
+    }
+    return '';
   }
 
   /// 详情页优先展示 subscribersCount（实际 Watch 数），缺失时回退 watchersCount
@@ -149,6 +171,8 @@ class RepoItem {
       parentFullName: parentJson == null
           ? ''
           : asString(parentJson['full_name']),
+      cloneUrl: asString(json['clone_url']),
+      sshUrl: asString(json['ssh_url']),
       createdAt: asDateTime(json['created_at']),
       updatedAt: asDateTime(json['updated_at']),
       pushedAt: asDateTime(json['pushed_at']),
@@ -286,6 +310,126 @@ class CommitItem {
       authorAvatar: ghAuthor == null ? '' : asString(ghAuthor['avatar_url']),
       htmlUrl: asString(json['html_url']),
       committedAt: asDateTime(commitAuthor['date']),
+    );
+  }
+}
+
+/// Commit 或 Pull Request 中单个文件的变更明细与 Diff Patch
+class CommitFileChange {
+  const CommitFileChange({
+    required this.filename,
+    required this.previousFilename,
+    required this.status,
+    required this.additions,
+    required this.deletions,
+    required this.changes,
+    required this.patch,
+  });
+
+  final String filename;
+  final String previousFilename;
+  final String status;
+  final int additions;
+  final int deletions;
+  final int changes;
+  final String patch;
+
+  /// 文件状态短标识（A 新增 / D 删除 / R 重命名 / M 修改）
+  String get statusBadge {
+    switch (status.toLowerCase()) {
+      case 'added':
+        return 'A';
+      case 'removed':
+        return 'D';
+      case 'renamed':
+        return 'R';
+      default:
+        return 'M';
+    }
+  }
+
+  /// 兼容重命名路径展示
+  String get displayPath => previousFilename.isNotEmpty && status == 'renamed'
+      ? '$previousFilename → $filename'
+      : filename;
+
+  factory CommitFileChange.fromJson(Map<String, dynamic> json) {
+    return CommitFileChange(
+      filename: asString(json['filename']),
+      previousFilename: asString(json['previous_filename']),
+      status: asString(json['status'], fallback: 'modified'),
+      additions: asInt(json['additions']),
+      deletions: asInt(json['deletions']),
+      changes: asInt(json['changes']),
+      patch: asString(json['patch']),
+    );
+  }
+}
+
+/// Commit 变更行数统计
+class CommitStats {
+  const CommitStats({
+    required this.total,
+    required this.additions,
+    required this.deletions,
+  });
+
+  final int total;
+  final int additions;
+  final int deletions;
+
+  factory CommitStats.fromJson(Map<String, dynamic> json) {
+    return CommitStats(
+      total: asInt(json['total']),
+      additions: asInt(json['additions']),
+      deletions: asInt(json['deletions']),
+    );
+  }
+}
+
+/// 单个 Commit 完整详情（含父节点 SHA、变更汇总与逐文件 Diff）
+class CommitDetail {
+  const CommitDetail({
+    required this.commit,
+    required this.parents,
+    required this.stats,
+    required this.files,
+  });
+
+  final CommitItem commit;
+  final List<String> parents;
+  final CommitStats stats;
+  final List<CommitFileChange> files;
+
+  factory CommitDetail.fromJson(Map<String, dynamic> json) {
+    final parentItems = json['parents'];
+    final parentShas = <String>[];
+    if (parentItems is List) {
+      for (final item in parentItems) {
+        final sha = asString(asMapOrEmpty(item)['sha']);
+        if (sha.isNotEmpty) parentShas.add(sha);
+      }
+    }
+    return CommitDetail(
+      commit: CommitItem.fromJson(json),
+      parents: List<String>.unmodifiable(parentShas),
+      stats: CommitStats.fromJson(asMapOrEmpty(json['stats'])),
+      files: asList(json['files'], CommitFileChange.fromJson),
+    );
+  }
+}
+
+/// 仓库贡献者信息（含贡献提交次数）
+class RepoContributor {
+  const RepoContributor({required this.owner, required this.contributions});
+
+  final RepoOwner owner;
+  final int contributions;
+
+  factory RepoContributor.fromJson(Map<String, dynamic> json) {
+    return RepoContributor(
+      owner: RepoOwner.fromJson(json),
+      contributions: asInt(json['contributions']),
     );
   }
 }

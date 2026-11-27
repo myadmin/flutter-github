@@ -174,12 +174,14 @@ class _MineViewState extends State<MineView> {
     }
   }
 
-  /// 访问私有入口前检查登录态，未登录时弹出提示并跳往登录页
-  bool _ensureLogin(String hint) {
-    if (_userController.isLoggedIn) return true;
-    ToastUtils.showToast(context, hint);
-    Navigator.pushNamed(context, AppRoutes.login);
-    return false;
+  /// 访问私有入口前检查登录态，未登录时引导登录，登录成功后自动续跳目标页
+  Future<void> _openLoginGatedRoute(String hint, String routeName) async {
+    if (!_userController.isLoggedIn) {
+      ToastUtils.showToast(context, hint);
+      await Navigator.pushNamed(context, AppRoutes.login);
+      if (!mounted || !_userController.isLoggedIn) return;
+    }
+    await Navigator.pushNamed(context, routeName);
   }
 
   /// 二次确认后退出登录，清理本地令牌及跨页内存缓存
@@ -262,21 +264,16 @@ class _MineViewState extends State<MineView> {
                 }),
                 const SizedBox(height: AppSpacing.module),
                 GhMineQuickActions(
-                  onMyReposTap: () {
-                    if (_ensureLogin('登录后查看我的仓库')) {
-                      Navigator.pushNamed(context, AppRoutes.myReposPath);
-                    }
-                  },
-                  onMyStarsTap: () {
-                    if (_ensureLogin('登录后查看我 Star 的项目')) {
-                      Navigator.pushNamed(context, AppRoutes.myStarsPath);
-                    }
-                  },
-                  onNotificationsTap: () {
-                    if (_ensureLogin('登录后查看消息通知')) {
-                      Navigator.pushNamed(context, AppRoutes.notificationsPath);
-                    }
-                  },
+                  onMyReposTap: () =>
+                      _openLoginGatedRoute('登录后查看我的仓库', AppRoutes.myReposPath),
+                  onMyStarsTap: () => _openLoginGatedRoute(
+                    '登录后查看我 Star 的项目',
+                    AppRoutes.myStarsPath,
+                  ),
+                  onNotificationsTap: () => _openLoginGatedRoute(
+                    '登录后查看消息通知',
+                    AppRoutes.notificationsPath,
+                  ),
                   onFootprintTap: () =>
                       Navigator.pushNamed(context, AppRoutes.footprintPath),
                 ),

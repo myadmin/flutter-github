@@ -35,6 +35,7 @@ class IssueItem {
     required this.state,
     required this.commentsCount,
     required this.isPullRequest,
+    this.isMerged = false,
     required this.htmlUrl,
     required this.user,
     required this.labels,
@@ -50,6 +51,7 @@ class IssueItem {
   final String state;
   final int commentsCount;
   final bool isPullRequest;
+  final bool isMerged;
   final String htmlUrl;
   final RepoOwner user;
   final List<IssueLabel> labels;
@@ -59,7 +61,33 @@ class IssueItem {
 
   bool get isOpen => state.toLowerCase() == 'open';
 
+  IssueItem copyWith({
+    String? title,
+    String? body,
+    String? state,
+    int? commentsCount,
+    bool? isMerged,
+  }) {
+    return IssueItem(
+      id: id,
+      number: number,
+      title: title ?? this.title,
+      body: body ?? this.body,
+      state: state ?? this.state,
+      commentsCount: commentsCount ?? this.commentsCount,
+      isPullRequest: isPullRequest,
+      isMerged: isMerged ?? this.isMerged,
+      htmlUrl: htmlUrl,
+      user: user,
+      labels: labels,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      closedAt: closedAt,
+    );
+  }
+
   factory IssueItem.fromJson(Map<String, dynamic> json) {
+    final prMap = asMapOrNull(json['pull_request']);
     return IssueItem(
       id: asInt(json['id']),
       number: asInt(json['number']),
@@ -67,13 +95,109 @@ class IssueItem {
       body: asString(json['body']),
       state: asString(json['state'], fallback: 'open'),
       commentsCount: asInt(json['comments']),
-      isPullRequest: asMapOrNull(json['pull_request']) != null,
+      isPullRequest: prMap != null,
+      isMerged:
+          asDateTime(json['merged_at']) != null ||
+          asDateTime(prMap?['merged_at']) != null,
       htmlUrl: asString(json['html_url']),
       user: RepoOwner.fromJson(asMapOrEmpty(json['user'])),
       labels: asList(json['labels'], IssueLabel.fromJson),
       createdAt: asDateTime(json['created_at']),
       updatedAt: asDateTime(json['updated_at']),
       closedAt: asDateTime(json['closed_at']),
+    );
+  }
+
+  /// 从 `/pulls` 列表元素构造条目标记 `isPullRequest = true`
+  factory IssueItem.fromPullRequestJson(Map<String, dynamic> json) {
+    return IssueItem(
+      id: asInt(json['id']),
+      number: asInt(json['number']),
+      title: asString(json['title']),
+      body: asString(json['body']),
+      state: asString(json['state'], fallback: 'open'),
+      commentsCount: asInt(json['comments']) + asInt(json['review_comments']),
+      isPullRequest: true,
+      isMerged: asDateTime(json['merged_at']) != null,
+      htmlUrl: asString(json['html_url']),
+      user: RepoOwner.fromJson(asMapOrEmpty(json['user'])),
+      labels: asList(json['labels'], IssueLabel.fromJson),
+      createdAt: asDateTime(json['created_at']),
+      updatedAt: asDateTime(json['updated_at']),
+      closedAt: asDateTime(json['closed_at']),
+    );
+  }
+}
+
+/// Pull Request 专属元数据与统计信息
+class PullRequestDetail {
+  const PullRequestDetail({
+    required this.number,
+    required this.title,
+    required this.body,
+    required this.state,
+    required this.merged,
+    required this.draft,
+    required this.mergeable,
+    required this.headRef,
+    required this.headSha,
+    required this.headRepoFullName,
+    required this.baseRef,
+    required this.commits,
+    required this.additions,
+    required this.deletions,
+    required this.changedFiles,
+    required this.mergedByLogin,
+    required this.htmlUrl,
+    this.mergedAt,
+  });
+
+  final int number;
+  final String title;
+  final String body;
+  final String state;
+  final bool merged;
+  final bool draft;
+  final bool? mergeable;
+  final String headRef;
+  final String headSha;
+  final String headRepoFullName;
+  final String baseRef;
+  final int commits;
+  final int additions;
+  final int deletions;
+  final int changedFiles;
+  final String mergedByLogin;
+  final String htmlUrl;
+  final DateTime? mergedAt;
+
+  bool get isOpen => state.toLowerCase() == 'open';
+
+  factory PullRequestDetail.fromJson(Map<String, dynamic> json) {
+    final head = asMapOrEmpty(json['head']);
+    final headRepo = asMapOrNull(head['repo']);
+    final base = asMapOrEmpty(json['base']);
+    final mergedBy = asMapOrNull(json['merged_by']);
+    final rawMergeable = json['mergeable'];
+    return PullRequestDetail(
+      number: asInt(json['number']),
+      title: asString(json['title']),
+      body: asString(json['body']),
+      state: asString(json['state'], fallback: 'open'),
+      merged: asBool(json['merged']) || asDateTime(json['merged_at']) != null,
+      draft: asBool(json['draft']),
+      mergeable: rawMergeable is bool ? rawMergeable : null,
+      headRef: asString(head['ref']),
+      headSha: asString(head['sha']),
+      headRepoFullName: headRepo == null ? '' : asString(headRepo['full_name']),
+      baseRef: asString(base['ref']),
+      commits: asInt(json['commits']),
+      additions: asInt(json['additions']),
+      deletions: asInt(json['deletions']),
+      changedFiles: asInt(json['changed_files']),
+      mergedByLogin: mergedBy == null ? '' : asString(mergedBy['login']),
+      htmlUrl: asString(json['html_url']),
+      mergedAt: asDateTime(json['merged_at']),
     );
   }
 }

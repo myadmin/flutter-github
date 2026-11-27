@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:gh_explorer/api/repo.dart';
 import 'package:gh_explorer/api/star.dart';
@@ -45,11 +46,18 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
 
   RepoItem? _repo;
   String _readme = '';
+  String _selectedBranch = '';
+  List<RepoBranch> _branches = const [];
+  bool _readmeLoading = false;
   bool _isStarred = false;
   bool _isLoading = true;
   String _errorMessage = '';
 
   late final Worker _userWatcher;
+
+  String get _effectiveBranch => _selectedBranch.isNotEmpty
+      ? _selectedBranch
+      : (_repo?.defaultBranch ?? '');
 
   bool get _hasValidArgs =>
       widget.owner.trim().isNotEmpty && widget.repoName.trim().isNotEmpty;
@@ -105,10 +113,11 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
 
     try {
       final detailFuture = getRepoDetailAPI(widget.owner, widget.repoName);
-      // README 与 Star 检查失败不影响仓库主信息展示
+      // README、Star 与分支列表失败不影响仓库主信息展示
       final readmeFuture = getRepoReadmeRawAPI(
         widget.owner,
         widget.repoName,
+        ref: _selectedBranch,
       ).catchError((Object _) => '');
       final starFuture = _userController.isLoggedIn
           ? checkRepoStarredAPI(
@@ -116,11 +125,17 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
               widget.repoName,
             ).catchError((Object _) => false)
           : Future<bool>.value(false);
+      final branchesFuture = getAllRepoBranchesAPI(
+        widget.owner,
+        widget.repoName,
+        maxPages: 1,
+      ).catchError((Object _) => const <RepoBranch>[]);
 
-      final (repo, readme, starred) = await (
+      final (repo, readme, starred, branches) = await (
         detailFuture,
         readmeFuture,
         starFuture,
+        branchesFuture,
       ).wait;
 
       if (!mounted) return;
@@ -134,6 +149,10 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
       setState(() {
         _repo = repo;
         _readme = readme;
+        _branches = branches;
+        if (_selectedBranch.isEmpty) {
+          _selectedBranch = repo.defaultBranch;
+        }
         _isStarred = starred;
         _isLoading = false;
       });
@@ -144,6 +163,97 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
         _errorMessage = resolveErrorMessage(e, fallback: '仓库信息加载失败');
       });
     }
+  }
+
+  /// 切换展示分支并同步刷新该分支的 README
+  Future<void> _switchBranch(String branch) async {
+    if (branch == _effectiveBranch) return;
+    setState(() {
+      _selectedBranch = branch;
+      _readmeLoading = true;
+    });
+    try {
+      final readme = await getRepoReadmeRawAPI(
+        widget.owner,
+        widget.repoName,
+        ref: branch,
+      ).catchError((Object _) => '');
+      if (!mounted) return;
+      setState(() {
+        _readme = readme;
+        _readmeLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _readmeLoading = false);
+    }
+  }
+
+  /// 弹出 Clone 地址选择窗并支持一键复制 HTTPS / SSH 命令
+  Future<void> _showCloneSheet(RepoItem repo) async {
+    final colors = context.appColors;
+    final httpsUrl = repo.effectiveCloneUrl;
+    final sshUrl = repo.effectiveSshUrl;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: colors.cardBackground,
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Clone 仓库地址', style: sheetCtx.sectionTitleStyle),
+              const SizedBox(height: 12),
+              if (httpsUrl.isNotEmpty)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.link, color: colors.primary),
+                  title: const Text('HTTPS'),
+                  subtitle: Text(
+                    httpsUrl,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: sheetCtx.monoSmallStyle,
+                  ),
+                  trailing: const Icon(Icons.copy, size: 18),
+                  onTap: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: 'git clone $httpsUrl'),
+                    );
+                    if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                    if (mounted) {
+                      ToastUtils.showToast(context, '已复制 git clone (HTTPS)');
+                    }
+                  },
+                ),
+              if (sshUrl.isNotEmpty)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.vpn_key_outlined, color: colors.merged),
+                  title: const Text('SSH'),
+                  subtitle: Text(
+                    sshUrl,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: sheetCtx.monoSmallStyle,
+                  ),
+                  trailing: const Icon(Icons.copy, size: 18),
+                  onTap: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: 'git clone $sshUrl'),
+                    );
+                    if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                    if (mounted) {
+                      ToastUtils.showToast(context, '已复制 git clone (SSH)');
+                    }
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// 使用外部浏览器打开 GitHub 仓库或项目主页链接
@@ -169,6 +279,12 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
         foregroundColor: context.appColors.textPrimary,
         elevation: 0,
         actions: [
+          if (_repo != null)
+            IconButton(
+              onPressed: () => _showCloneSheet(_repo!),
+              icon: const Icon(Icons.content_copy, size: 19),
+              tooltip: '复制 Clone 地址',
+            ),
           if (_repo != null && _repo!.htmlUrl.isNotEmpty)
             IconButton(
               onPressed: () => _openInBrowser(_repo!.htmlUrl),
@@ -410,13 +526,13 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
             _NavRow(
               icon: Icons.code,
               title: '浏览代码文件',
-              trailingText: repo.defaultBranch,
+              trailingText: _effectiveBranch,
               onTap: () => Navigator.pushNamed(
                 context,
                 AppRoutes.repoFiles(
                   repo.ownerLogin,
                   repo.repoName,
-                  ref: repo.defaultBranch,
+                  ref: _effectiveBranch,
                 ),
               ),
             ),
@@ -434,15 +550,95 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
             _NavRow(
               icon: Icons.commit,
               title: '提交历史 (Commits)',
-              trailingText: repo.defaultBranch,
+              trailingText: _effectiveBranch,
               onTap: () => Navigator.pushNamed(
                 context,
                 AppRoutes.repoCommits(
                   repo.ownerLogin,
                   repo.repoName,
-                  branch: repo.defaultBranch,
+                  branch: _effectiveBranch,
                 ),
               ),
+            ),
+            Divider(height: 1, color: context.appColors.divider),
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.repoReleases(repo.ownerLogin, repo.repoName),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 11,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.new_releases_outlined,
+                            size: 18,
+                            color: context.appColors.brandDark,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Releases 版本发布',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: context.bodySmallStyle.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 22,
+                  color: context.appColors.divider,
+                ),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.repoCommunity(repo.ownerLogin, repo.repoName),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 11,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.people_outline,
+                            size: 18,
+                            color: context.appColors.brandDark,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              '社区 · ${formatCompactNumber(repo.stargazersCount + repo.forksCount)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: context.bodySmallStyle.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -467,11 +663,56 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
             children: [
               const Icon(Icons.menu_book_outlined, size: 18),
               const SizedBox(width: 6),
-              Text('README.md', style: context.sectionTitleStyle),
+              Expanded(
+                child: Text('README.md', style: context.sectionTitleStyle),
+              ),
+              if (_branches.length > 1)
+                PopupMenuButton<String>(
+                  initialValue: _effectiveBranch,
+                  onSelected: _switchBranch,
+                  tooltip: '切换展示分支',
+                  itemBuilder: (context) => [
+                    for (final b in _branches)
+                      PopupMenuItem<String>(value: b.name, child: Text(b.name)),
+                  ],
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.appColors.inputFill,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.alt_route, size: 13),
+                        const SizedBox(width: 4),
+                        Text(
+                          _effectiveBranch,
+                          style: context.captionSmallStyle,
+                        ),
+                        const Icon(Icons.arrow_drop_down, size: 15),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
           Divider(height: 20, color: context.appColors.divider),
-          if (_readme.trim().isEmpty)
+          if (_readmeLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (_readme.trim().isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Center(
@@ -483,7 +724,7 @@ class _RepoDetailPageState extends State<RepoDetailPage> {
               data: _readme,
               owner: repo.ownerLogin,
               repo: repo.repoName,
-              branch: repo.defaultBranch,
+              branch: _effectiveBranch,
             ),
         ],
       ),
@@ -555,6 +796,8 @@ class _NavRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      dense: true,
+      visualDensity: VisualDensity.compact,
       leading: Icon(icon, size: 20, color: context.appColors.brandDark),
       title: Text(title, style: context.bodyStrongStyle),
       trailing: Row(

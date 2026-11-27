@@ -74,6 +74,9 @@ class AppRelease {
     required this.notes,
     required this.htmlUrl,
     required this.assets,
+    this.releaseName = '',
+    this.prerelease = false,
+    this.publishedAt,
   });
 
   /// GitHub 原始 Tag 名称，例如 `v1.0.0-build.4` 或 `v1.0.1`
@@ -94,6 +97,17 @@ class AppRelease {
   /// 附带构建产物列表
   final List<ReleaseAsset> assets;
 
+  /// Release 展示标题（可能为空）
+  final String releaseName;
+
+  /// 是否为预发布版本
+  final bool prerelease;
+
+  /// 发布时间
+  final DateTime? publishedAt;
+
+  String get displayTitle => releaseName.isNotEmpty ? releaseName : tagName;
+
   /// 从 GitHub Release JSON 解析对象
   factory AppRelease.fromJson(Map<String, dynamic> json) {
     final tag = asString(json['tag_name']);
@@ -105,6 +119,10 @@ class AppRelease {
       notes: asString(json['body']),
       htmlUrl: asString(json['html_url']),
       assets: asList(json['assets'], ReleaseAsset.fromJson),
+      releaseName: asString(json['name']),
+      prerelease: asBool(json['prerelease']),
+      publishedAt:
+          asDateTime(json['published_at']) ?? asDateTime(json['created_at']),
     );
   }
 

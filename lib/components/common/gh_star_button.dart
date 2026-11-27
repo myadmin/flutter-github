@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:gh_explorer/api/star.dart';
 import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
+import 'package:gh_explorer/services/star_service.dart';
 import 'package:gh_explorer/stores/star_sync_controller.dart';
 import 'package:gh_explorer/stores/user_controller.dart';
 import 'package:gh_explorer/utils/api_exception.dart';
@@ -117,20 +117,23 @@ class _GhStarButtonState extends State<GhStarButton> {
         : (prevCount > 0 ? prevCount - 1 : 0);
 
     _pending = true;
-    _applySnapshot(nextStarred, nextCount);
+    if (mounted) setState(() {});
 
     try {
-      if (nextStarred) {
-        await starRepoAPI(widget.owner, widget.repoName);
-      } else {
-        await unstarRepoAPI(widget.owner, widget.repoName);
-      }
+      await StarService.toggleStar(
+        owner: widget.owner,
+        repoName: widget.repoName,
+        prevStarred: prevStarred,
+        prevCount: prevCount,
+        nextStarred: nextStarred,
+        nextCount: nextCount,
+        starSync: _starSync,
+        onStateChanged: _applySnapshot,
+      );
       if (!mounted) return;
       ToastUtils.showToast(context, nextStarred ? '已 Star 该项目' : '已取消 Star');
       widget.onToggled?.call(nextStarred);
     } catch (e) {
-      // 请求失败时回滚到先前状态
-      _applySnapshot(prevStarred, prevCount);
       if (!mounted) return;
       ToastUtils.showToast(
         context,

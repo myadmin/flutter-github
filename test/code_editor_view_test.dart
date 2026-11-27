@@ -283,11 +283,11 @@ const label = 'UndoNotice';''';
       await tester.pump();
       expect(find.text('换行'), findsOneWidget);
 
-      // 深色 / 浅色编辑器主题切换
-      expect(find.byIcon(Icons.light_mode_outlined), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.light_mode_outlined));
-      await tester.pump();
+      // 编辑器主题联动全局外观（默认亮色起点），支持一键切换到暗色再切回
       expect(find.byIcon(Icons.dark_mode_outlined), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.dark_mode_outlined));
+      await tester.pump();
+      expect(find.byIcon(Icons.light_mode_outlined), findsOneWidget);
 
       // 点击某一行代码激活当前行高亮
       await tester.tap(find.text('2'));

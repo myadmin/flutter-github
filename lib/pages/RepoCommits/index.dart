@@ -10,6 +10,7 @@ import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/repo.dart';
+import 'package:gh_explorer/routes/app_routes.dart';
 import 'package:gh_explorer/utils/formatters.dart';
 import 'package:gh_explorer/utils/paged_list.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
@@ -113,6 +114,9 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
   }
 
   Widget _buildBody() {
+    if (widget.owner.trim().isEmpty || widget.repoName.trim().isEmpty) {
+      return const HmEmptyView(icon: Icons.commit, title: '仓库信息缺失');
+    }
     if (_list.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -140,60 +144,78 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
             );
           }
           final commit = _list[index];
-          return Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: context.appColors.cardBackground,
+          return Material(
+            color: context.appColors.cardBackground,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            child: InkWell(
+              onTap: commit.sha.isEmpty
+                  ? null
+                  : () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.repoCommitDetail(
+                        widget.owner,
+                        widget.repoName,
+                        commit.sha,
+                      ),
+                    ),
               borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(
-                color: context.appColors.divider.withValues(alpha: 0.6),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(commit.titleLine, style: context.bodyStrongStyle),
-                const SizedBox(height: 8),
-                Row(
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  border: Border.all(
+                    color: context.appColors.divider.withValues(alpha: 0.6),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    AppNetworkImage(
-                      url: commit.authorAvatar,
-                      width: 20,
-                      height: 20,
-                      decodeWidth: 20,
-                      placeholderIconSize: 12,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '${commit.displayAuthor} · ${formatRelativeTime(commit.committedAt)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: context.captionStyle,
-                      ),
-                    ),
-                    InkWell(
-                      onTap: () => _copySha(commit.sha),
-                      borderRadius: BorderRadius.circular(AppRadius.small),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
+                    Text(commit.titleLine, style: context.bodyStrongStyle),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        AppNetworkImage(
+                          url: commit.authorAvatar,
+                          width: 20,
+                          height: 20,
+                          decodeWidth: 20,
+                          placeholderIconSize: 12,
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        decoration: BoxDecoration(
-                          color: context.appColors.inputFill,
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            '${commit.displayAuthor} · ${formatRelativeTime(commit.committedAt)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: context.captionStyle,
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () => _copySha(commit.sha),
                           borderRadius: BorderRadius.circular(AppRadius.small),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: context.appColors.inputFill,
+                              borderRadius: BorderRadius.circular(
+                                AppRadius.small,
+                              ),
+                            ),
+                            child: Text(
+                              commit.shortSha,
+                              style: context.monoSmallStyle,
+                            ),
+                          ),
                         ),
-                        child: Text(
-                          commit.shortSha,
-                          style: context.monoSmallStyle,
-                        ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           );
         },

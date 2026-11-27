@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:gh_explorer/constants/index.dart';
+import 'package:gh_explorer/models/app_release.dart';
 import 'package:gh_explorer/models/parsers.dart';
 import 'package:gh_explorer/models/repo.dart';
 import 'package:gh_explorer/utils/api_exception.dart';
@@ -140,6 +141,106 @@ Future<PageResult<CommitItem>> getRepoCommitsAPI(
   );
   return PageResult<CommitItem>(
     items: asModelList(res.data, CommitItem.fromJson),
+    page: page,
+    hasMore: res.hasNextPage,
+  );
+}
+
+/// 获取单个 Commit 详情及逐文件变更 Diff
+Future<CommitDetail> getRepoCommitDetailAPI(
+  String owner,
+  String repo,
+  String sha, {
+  CancelToken? cancelToken,
+}) async {
+  final encodedSha = Uri.encodeComponent(sha.trim());
+  final data = await dioRequest.get(
+    '${_repoBase(owner, repo)}/commits/$encodedSha',
+    cancelToken: cancelToken,
+  );
+  return CommitDetail.fromJson(asMap(data));
+}
+
+/// 分页获取仓库 Release 发布列表
+Future<PageResult<AppRelease>> getRepoReleasesAPI(
+  String owner,
+  String repo, {
+  int page = 1,
+  int perPage = GlobalConstants.defaultPageSize,
+  CancelToken? cancelToken,
+}) async {
+  final res = await dioRequest.getPaged(
+    '${_repoBase(owner, repo)}/releases',
+    params: {'page': page, 'per_page': perPage},
+    perPage: perPage,
+    cancelToken: cancelToken,
+  );
+  return PageResult<AppRelease>(
+    items: asModelList(res.data, AppRelease.fromJson),
+    page: page,
+    hasMore: res.hasNextPage,
+  );
+}
+
+/// 分页获取仓库 Stargazers 用户列表
+Future<PageResult<RepoOwner>> getRepoStargazersAPI(
+  String owner,
+  String repo, {
+  int page = 1,
+  int perPage = GlobalConstants.defaultPageSize,
+  CancelToken? cancelToken,
+}) async {
+  final res = await dioRequest.getPaged(
+    '${_repoBase(owner, repo)}/stargazers',
+    params: {'page': page, 'per_page': perPage},
+    perPage: perPage,
+    cancelToken: cancelToken,
+  );
+  return PageResult<RepoOwner>(
+    items: asModelList(res.data, RepoOwner.fromJson),
+    page: page,
+    hasMore: res.hasNextPage,
+  );
+}
+
+/// 分页获取仓库 Forks 列表
+Future<PageResult<RepoItem>> getRepoForksAPI(
+  String owner,
+  String repo, {
+  int page = 1,
+  int perPage = GlobalConstants.defaultPageSize,
+  String sort = 'newest',
+  CancelToken? cancelToken,
+}) async {
+  final res = await dioRequest.getPaged(
+    '${_repoBase(owner, repo)}/forks',
+    params: {'sort': sort, 'page': page, 'per_page': perPage},
+    perPage: perPage,
+    cancelToken: cancelToken,
+  );
+  return PageResult<RepoItem>(
+    items: asModelList(res.data, RepoItem.fromJson),
+    page: page,
+    hasMore: res.hasNextPage,
+  );
+}
+
+/// 分页获取仓库贡献者列表（含提交次数）
+Future<PageResult<RepoContributor>> getRepoContributorsAPI(
+  String owner,
+  String repo, {
+  int page = 1,
+  int perPage = GlobalConstants.defaultPageSize,
+  CancelToken? cancelToken,
+}) async {
+  final res = await dioRequest.getPaged(
+    '${_repoBase(owner, repo)}/contributors',
+    params: {'page': page, 'per_page': perPage},
+    perPage: perPage,
+    cancelToken: cancelToken,
+  );
+  return PageResult<RepoContributor>(
+    items: asModelList(res.data, RepoContributor.fromJson),
     page: page,
     hasMore: res.hasNextPage,
   );

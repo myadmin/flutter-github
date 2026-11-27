@@ -5,7 +5,10 @@ import 'package:get/get.dart';
 import 'package:gh_explorer/components/common/hm_bottom_bar.dart';
 import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
+import 'package:gh_explorer/constants/explore_config.dart';
 import 'package:gh_explorer/stores/explore_tags_controller.dart';
+import 'package:gh_explorer/stores/footprint_store.dart';
+import 'package:gh_explorer/stores/search_history_store.dart';
 import 'package:gh_explorer/stores/theme_controller.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
 
@@ -131,6 +134,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(height: AppSpacing.module),
                   _buildOrderCard(selectedTags),
                 ],
+                const SizedBox(height: AppSpacing.module),
+                _buildCacheCard(),
               ],
             );
           }),
@@ -591,6 +596,93 @@ class _SettingsPageState extends State<SettingsPage> {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCacheCard() {
+    final colors = context.appColors;
+    return _buildCard(
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.cleaning_services_outlined,
+                  size: 18,
+                  color: colors.primary,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text('本地数据与缓存管理', style: context.bodyStrongStyle),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: Icon(
+                Icons.history,
+                size: 20,
+                color: colors.textSecondary,
+              ),
+              title: Text('清空浏览足迹', style: context.bodyStyle),
+              trailing: Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: colors.textSecondary,
+              ),
+              onTap: () async {
+                await FootprintStore.clear();
+                if (mounted) ToastUtils.showToast(context, '已清空本地浏览足迹');
+              },
+            ),
+            Divider(height: 1, color: colors.divider),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: Icon(
+                Icons.manage_search,
+                size: 20,
+                color: colors.textSecondary,
+              ),
+              title: Text('清空搜索历史', style: context.bodyStyle),
+              trailing: Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: colors.textSecondary,
+              ),
+              onTap: () async {
+                await SearchHistoryStore.clear();
+                if (mounted) ToastUtils.showToast(context, '已清空本地搜索历史');
+              },
+            ),
+            Divider(height: 1, color: colors.divider),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: Icon(
+                Icons.cached,
+                size: 20,
+                color: colors.textSecondary,
+              ),
+              title: Text('清除首页推荐缓存', style: context.bodyStyle),
+              trailing: Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: colors.textSecondary,
+              ),
+              onTap: () {
+                ExploreShowcaseCache.clear();
+                ToastUtils.showToast(context, '已清除首页推荐缓存');
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -29,13 +29,19 @@ Future<PageResult<GithubEvent>> getReceivedEventsAPI(
 /// 获取 GitHub 通知列表
 Future<PageResult<NotificationItem>> getNotificationsAPI({
   bool all = false,
+  bool participating = false,
   int page = 1,
   int perPage = GlobalConstants.defaultPageSize,
   CancelToken? cancelToken,
 }) async {
   final res = await dioRequest.getPaged(
     HttpConstants.notifications,
-    params: {'all': all, 'page': page, 'per_page': perPage},
+    params: {
+      'all': all,
+      if (participating) 'participating': true,
+      'page': page,
+      'per_page': perPage,
+    },
     perPage: perPage,
     cancelToken: cancelToken,
   );

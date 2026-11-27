@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,7 +11,13 @@ class SearchHistoryStore {
 
   static const int maxItems = 15;
 
-  static Future<void> _writeQueue = Future<void>.value();
+  /// 测试用：在每个用例切换 FakeAsync Zone 时重置写入队列，避免跨用例挂起
+  @visibleForTesting
+  static void resetForTest() {
+    _writeQueue = null;
+  }
+
+  static Future<void>? _writeQueue;
 
   static Future<List<String>> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -51,8 +58,15 @@ class SearchHistoryStore {
 
   /// 串行执行写任务，前一次失败不会阻塞后续任务
   static Future<T> _serialized<T>(Future<T> Function() task) {
-    final result = _writeQueue.then((_) => task());
-    _writeQueue = result.then<void>((_) {}, onError: (Object _) {});
+    final prev = _writeQueue;
+    final result = prev == null ? task() : prev.then((_) => task());
+    final marker = result.then<void>((_) {}, onError: (Object _) {});
+    _writeQueue = marker;
+    marker.whenComplete(() {
+      if (identical(_writeQueue, marker)) {
+        _writeQueue = null;
+      }
+    });
     return result;
   }
 }

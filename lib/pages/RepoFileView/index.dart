@@ -8,6 +8,7 @@ import 'package:gh_explorer/components/common/gh_markdown_view.dart';
 import 'package:gh_explorer/components/common/hm_bottom_bar.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/utils/api_exception.dart';
+import 'package:gh_explorer/utils/external_link.dart';
 import 'package:gh_explorer/utils/formatters.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
 
@@ -148,7 +149,32 @@ class _RepoFileViewPageState extends State<RepoFileViewPage> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_errorMessage.isNotEmpty) {
-      return AppErrorView(message: _errorMessage, onRetry: _load);
+      final canOpenWeb =
+          widget.owner.isNotEmpty &&
+          widget.repoName.isNotEmpty &&
+          widget.path.isNotEmpty;
+      final branch = widget.branch.isEmpty ? 'HEAD' : widget.branch;
+      final encodedPath = widget.path
+          .split('/')
+          .where((s) => s.isNotEmpty)
+          .map(Uri.encodeComponent)
+          .join('/');
+      final blobUrl =
+          'https://github.com/${Uri.encodeComponent(widget.owner)}/${Uri.encodeComponent(widget.repoName)}/blob/${Uri.encodeComponent(branch)}/$encodedPath';
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AppErrorView(message: _errorMessage, onRetry: _load),
+          if (canOpenWeb) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => openExternalUrl(blobUrl),
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('在 GitHub 网页端查看原文件'),
+            ),
+          ],
+        ],
+      );
     }
     if (_isImageFile) {
       final imageUrl = resolveRepoAssetUrl(

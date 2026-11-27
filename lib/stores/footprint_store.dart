@@ -35,16 +35,31 @@ class FootprintStore {
     }
   }
 
+  /// 测试用：在每个用例切换 FakeAsync Zone 时重置写入队列，避免跨用例挂起
+  @visibleForTesting
+  static void resetForTest() {
+    _writeQueue = null;
+  }
+
   /// 写操作串行化队列：详情页、搜索页可能同时记录足迹，
   /// 读-改-写并发会互相覆盖导致记录丢失。
-  static Future<void> _writeQueue = Future<void>.value();
+  static Future<void>? _writeQueue;
 
   static Future<List<FootprintItem>> record(FootprintItem item) {
     if (item.owner.isEmpty || item.name.isEmpty) {
       return load();
     }
-    final result = _writeQueue.then((_) => _recordInternal(item));
-    _writeQueue = result.then<void>((_) {}, onError: (Object _) {});
+    final prev = _writeQueue;
+    final result = prev == null
+        ? _recordInternal(item)
+        : prev.then((_) => _recordInternal(item));
+    final marker = result.then<void>((_) {}, onError: (Object _) {});
+    _writeQueue = marker;
+    marker.whenComplete(() {
+      if (identical(_writeQueue, marker)) {
+        _writeQueue = null;
+      }
+    });
     return result;
   }
 

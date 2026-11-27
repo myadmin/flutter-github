@@ -18,7 +18,7 @@ class GhCodeEditorView extends StatefulWidget {
     super.key,
     required this.content,
     required this.filePath,
-    this.initialDarkTheme = true,
+    this.initialDarkTheme,
     this.initialWordWrap = true,
   });
 
@@ -28,8 +28,8 @@ class GhCodeEditorView extends StatefulWidget {
   /// 文件路径（用于自动识别语言与标题提示）
   final String filePath;
 
-  /// 默认是否使用深色编辑器主题
-  final bool initialDarkTheme;
+  /// 显式指定初始深/浅色主题；为 null 时默认跟随全局应用外观明暗模式
+  final bool? initialDarkTheme;
 
   /// 默认是否开启自动换行，适配移动端窄屏阅读长代码行
   final bool initialWordWrap;
@@ -48,7 +48,8 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
   final ScrollController _horizontalController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
-  late bool _isDark;
+  bool _isDark = true;
+  bool _manualThemeOverride = false;
   late bool _wordWrap;
   double _fontSize = _defaultFontSize;
   int? _activeLineIndex;
@@ -67,10 +68,21 @@ class _GhCodeEditorViewState extends State<GhCodeEditorView> {
   @override
   void initState() {
     super.initState();
-    _isDark = widget.initialDarkTheme;
+    if (widget.initialDarkTheme != null) {
+      _isDark = widget.initialDarkTheme!;
+      _manualThemeOverride = true;
+    }
     _wordWrap = widget.initialWordWrap;
     _verticalController.addListener(_syncGutterScroll);
     _prepareDocument();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_manualThemeOverride && widget.initialDarkTheme == null) {
+      _isDark = context.appColors.isDark;
+    }
   }
 
   @override

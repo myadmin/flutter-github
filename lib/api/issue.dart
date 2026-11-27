@@ -4,12 +4,28 @@ import 'package:dio/dio.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/issue.dart';
 import 'package:gh_explorer/models/parsers.dart';
+import 'package:gh_explorer/models/repo.dart';
 import 'package:gh_explorer/utils/dio_request.dart';
 import 'package:gh_explorer/utils/paged_list.dart';
+
+/// Issue / PR 列表分类筛选类型
+enum IssueKindFilter {
+  all('全部类型'),
+  issue('仅 Issue'),
+  pr('仅 PR');
+
+  const IssueKindFilter(this.label);
+
+  final String label;
+}
 
 /// 拼接指定仓库 Issues 接口基础路径
 String _issuesBase(String owner, String repo) =>
     '${HttpConstants.repos}/${Uri.encodeComponent(owner.trim())}/${Uri.encodeComponent(repo.trim())}/issues';
+
+/// 拼接指定仓库 Pull Requests 接口基础路径
+String _pullsBase(String owner, String repo) =>
+    '${HttpConstants.repos}/${Uri.encodeComponent(owner.trim())}/${Uri.encodeComponent(repo.trim())}/pulls';
 
 /// 匹配形如 `repo:xxx`、`is:pr`、`author:someone` 的 GitHub Search 限定符
 final RegExp _searchQualifier = RegExp(r'(^|[\s(])[A-Za-z][A-Za-z0-9_-]*:');
@@ -37,6 +53,7 @@ String buildRepoIssueSearchQuery({
   required String repo,
   required String keyword,
   String state = 'open',
+  IssueKindFilter kind = IssueKindFilter.all,
 }) {
   var cleanKeyword = keyword.trim();
   // 支持输入 `#43475` 形式的编号检索，去掉前导 `#` 以提升 GitHub Search 命中率
@@ -48,6 +65,11 @@ String buildRepoIssueSearchQuery({
   final parts = <String>[
     'repo:${_cleanRepoPart(owner)}/${_cleanRepoPart(repo)}',
   ];
+  if (kind == IssueKindFilter.issue) {
+    parts.add('is:issue');
+  } else if (kind == IssueKindFilter.pr) {
+    parts.add('is:pr');
+  }
   final lower = cleanKeyword.toLowerCase();
   final hasExplicitState =
       lower.contains('is:open') || lower.contains('is:closed');
@@ -70,6 +92,7 @@ Future<PageResult<IssueItem>> searchRepoIssuesAPI(
   String repo, {
   required String keyword,
   String state = 'open',
+  IssueKindFilter kind = IssueKindFilter.all,
   int page = 1,
   int perPage = GlobalConstants.defaultPageSize,
   void Function(int totalCount)? onTotalCount,
@@ -80,6 +103,7 @@ Future<PageResult<IssueItem>> searchRepoIssuesAPI(
     repo: repo,
     keyword: keyword,
     state: state,
+    kind: kind,
   );
   final raw = asMap(
     await dioRequest.get(
@@ -94,6 +118,28 @@ Future<PageResult<IssueItem>> searchRepoIssuesAPI(
   final cappedTotal = math.min(totalCount, 1000);
   final hasMore = page * perPage < cappedTotal && items.isNotEmpty;
   return PageResult<IssueItem>(items: items, page: page, hasMore: hasMore);
+}
+
+/// 分页获取仓库 Pull Requests 列表
+Future<PageResult<IssueItem>> getRepoPullsAPI(
+  String owner,
+  String repo, {
+  String state = 'open',
+  int page = 1,
+  int perPage = GlobalConstants.defaultPageSize,
+  CancelToken? cancelToken,
+}) async {
+  final res = await dioRequest.getPaged(
+    _pullsBase(owner, repo),
+    params: {'state': state, 'page': page, 'per_page': perPage},
+    perPage: perPage,
+    cancelToken: cancelToken,
+  );
+  return PageResult<IssueItem>(
+    items: asModelList(res.data, IssueItem.fromPullRequestJson),
+    page: page,
+    hasMore: res.hasNextPage,
+  );
 }
 
 /// 获取仓库 Issue / PR 列表
@@ -162,4 +208,116 @@ Future<IssueComment> createIssueCommentAPI(
     data: {'body': body.trim()},
   );
   return IssueComment.fromJson(asMap(data));
+}
+
+/// 创建新 Issue（需要登录且 Token 含写权限）
+Future<IssueItem> createRepoIssueAPI(
+  String owner,
+  String repo, {
+  required String title,
+  String body = '',
+  List<String> labels = const [],
+}) async {
+  final payload = <String, dynamic>{'title': title.trim()};
+  final trimmedBody = body.trim();
+  if (trimmedBody.isNotEmpty) {
+    payload['body'] = trimmedBody;
+  }
+  if (labels.isNotEmpty) {
+    payload['labels'] = labels;
+  }
+  final data = await dioRequest.post(_issuesBase(owner, repo), data: payload);
+  return IssueItem.fromJson(asMap(data));
+}
+
+/// 修改 Issue/PR 标题、正文或状态（`open` / `closed`）
+Future<IssueItem> updateRepoIssueAPI(
+  String owner,
+  String repo,
+  int number, {
+  String? title,
+  String? body,
+  String? state,
+}) async {
+  final payload = <String, dynamic>{
+    if (title != null) 'title': title.trim(),
+    'body': ?body,
+    'state': ?state,
+  };
+  final data = await dioRequest.patch(
+    '${_issuesBase(owner, repo)}/$number',
+    data: payload,
+  );
+  return IssueItem.fromJson(asMap(data));
+}
+
+/// 获取仓库可用标签列表（用于新建 Issue 时快速选择）
+Future<List<IssueLabel>> getRepoLabelsAPI(
+  String owner,
+  String repo, {
+  int perPage = 50,
+}) async {
+  final encodedOwner = Uri.encodeComponent(owner.trim());
+  final encodedRepo = Uri.encodeComponent(repo.trim());
+  final data = await dioRequest.get(
+    '${HttpConstants.repos}/$encodedOwner/$encodedRepo/labels',
+    params: {'per_page': perPage},
+  );
+  return asModelList(data, IssueLabel.fromJson);
+}
+
+/// 获取单个 Pull Request 详情（含 head/base 分支、Merge 状态及统计行数）
+Future<PullRequestDetail> getPullRequestDetailAPI(
+  String owner,
+  String repo,
+  int number, {
+  CancelToken? cancelToken,
+}) async {
+  final data = await dioRequest.get(
+    '${_pullsBase(owner, repo)}/$number',
+    cancelToken: cancelToken,
+  );
+  return PullRequestDetail.fromJson(asMap(data));
+}
+
+/// 分页获取 Pull Request 的变更文件与 Patch Diff 列表
+Future<PageResult<CommitFileChange>> getPullRequestFilesAPI(
+  String owner,
+  String repo,
+  int number, {
+  int page = 1,
+  int perPage = 30,
+  CancelToken? cancelToken,
+}) async {
+  final res = await dioRequest.getPaged(
+    '${_pullsBase(owner, repo)}/$number/files',
+    params: {'page': page, 'per_page': perPage},
+    perPage: perPage,
+    cancelToken: cancelToken,
+  );
+  return PageResult<CommitFileChange>(
+    items: asModelList(res.data, CommitFileChange.fromJson),
+    page: page,
+    hasMore: res.hasNextPage,
+  );
+}
+
+/// 合并指定 Pull Request（`mergeMethod`: `merge` / `squash` / `rebase`）
+Future<({bool merged, String message})> mergePullRequestAPI(
+  String owner,
+  String repo,
+  int number, {
+  String mergeMethod = 'merge',
+  String commitTitle = '',
+}) async {
+  final data = asMap(
+    await dioRequest.put(
+      '${_pullsBase(owner, repo)}/$number/merge',
+      data: {
+        'merge_method': mergeMethod,
+        if (commitTitle.trim().isNotEmpty) 'commit_title': commitTitle.trim(),
+      },
+    ),
+  );
+  return (merged: asBool(data['merged']), message: asString(data['message']));
 }

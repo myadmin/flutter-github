@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
+import 'package:gh_explorer/routes/app_routes.dart';
 import 'package:gh_explorer/utils/formatters.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
 import 'package:gh_explorer/utils/external_link.dart';
@@ -21,7 +22,106 @@ class GhMarkdownView extends StatelessWidget {
   final String repo;
   final String branch;
 
-  /// 点击 Markdown 超链接时校验协议并唤起外部浏览器打开
+  /// 解析同仓库相对链接或 GitHub 站内链接，可命中应用内页面时优先端内跳转
+  bool _tryOpenInApp(BuildContext context, String rawHref) {
+    final trimmed = rawHref.trim();
+    if (trimmed.isEmpty || trimmed.startsWith('#')) return false;
+
+    final uri = Uri.tryParse(trimmed);
+    if (uri != null && !uri.hasScheme && !trimmed.startsWith('//')) {
+      if (owner.isNotEmpty && repo.isNotEmpty) {
+        final cleanPath = trimmed
+            .split('#')
+            .first
+            .split('?')
+            .first
+            .replaceFirst(RegExp(r'^\.?/'), '');
+        if (cleanPath.isEmpty) return false;
+        if (cleanPath.endsWith('/')) {
+          Navigator.pushNamed(
+            context,
+            AppRoutes.repoFiles(
+              owner,
+              repo,
+              ref: branch,
+              path: cleanPath.substring(0, cleanPath.length - 1),
+            ),
+          );
+          return true;
+        }
+        Navigator.pushNamed(
+          context,
+          AppRoutes.repoFileView(owner, repo, path: cleanPath, ref: branch),
+        );
+        return true;
+      }
+      return false;
+    }
+
+    if (uri == null || uri.host.toLowerCase() != 'github.com') return false;
+    final segs = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+    if (segs.length < 2) return false;
+    final targetOwner = segs[0];
+    final targetRepo = segs[1];
+    if (segs.length == 2) {
+      Navigator.pushNamed(
+        context,
+        AppRoutes.repoDetail(targetOwner, targetRepo),
+      );
+      return true;
+    }
+    final section = segs[2].toLowerCase();
+    if ((section == 'issues' || section == 'pull') && segs.length >= 4) {
+      final n = int.tryParse(segs[3]);
+      if (n != null && n > 0) {
+        Navigator.pushNamed(
+          context,
+          AppRoutes.repoIssueDetail(targetOwner, targetRepo, n),
+        );
+        return true;
+      }
+    }
+    if (section == 'commit' && segs.length >= 4) {
+      Navigator.pushNamed(
+        context,
+        AppRoutes.repoCommitDetail(targetOwner, targetRepo, segs[3]),
+      );
+      return true;
+    }
+    if (section == 'releases') {
+      Navigator.pushNamed(
+        context,
+        AppRoutes.repoReleases(targetOwner, targetRepo),
+      );
+      return true;
+    }
+    if (section == 'blob' && segs.length >= 5) {
+      final ref = segs[3];
+      final filePath = segs.sublist(4).join('/');
+      Navigator.pushNamed(
+        context,
+        AppRoutes.repoFileView(
+          targetOwner,
+          targetRepo,
+          path: filePath,
+          ref: ref,
+        ),
+      );
+      return true;
+    }
+    if (section == 'tree' && segs.length >= 4) {
+      final ref = segs[3];
+      final dirPath = segs.length >= 5 ? segs.sublist(4).join('/') : '';
+      Navigator.pushNamed(
+        context,
+        AppRoutes.repoFiles(targetOwner, targetRepo, ref: ref, path: dirPath),
+      );
+      return true;
+    }
+    return false;
+  }
+
+  /// 点击 Markdown 超链接时优先应用内跳转，否则校验协议并唤起外部浏览器打开
   Future<void> _handleLinkTap(
     BuildContext context,
     String text,
@@ -29,11 +129,57 @@ class GhMarkdownView extends StatelessWidget {
     String title,
   ) async {
     if (href == null || href.trim().isEmpty) return;
+    if (_tryOpenInApp(context, href)) return;
     // 仅放行 http/https/mailto，杜绝 javascript:、intent: 等协议注入
     final opened = await openExternalUrl(href);
     if (!opened && context.mounted) {
       ToastUtils.showToast(context, '无法打开链接');
     }
+  }
+
+  /// 全屏缩放预览 Markdown 中的图片
+  void _showImageViewer(BuildContext context, String imageUrl, String? label) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (dialogCtx) => Dialog.fullscreen(
+        backgroundColor: Colors.black87,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4,
+                child: Image.network(imageUrl, fit: BoxFit.contain),
+              ),
+            ),
+            Positioned(
+              top: 16,
+              right: 16,
+              child: SafeArea(
+                child: IconButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  style: IconButton.styleFrom(backgroundColor: Colors.black54),
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  tooltip: '关闭预览',
+                ),
+              ),
+            ),
+            if (label != null && label.isNotEmpty)
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 24,
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// 自定义图片构建器：补全仓库相对路径，并为不支持的 SVG 徽章提供文本胶囊降级
@@ -79,17 +225,20 @@ class GhMarkdownView extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Image.network(
-        resolved,
-        cacheWidth: cacheWidth,
-        semanticLabel: label,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return _buildImageFallback(context, alt, loading: true);
-        },
-        errorBuilder: (context, error, stackTrace) {
-          return _buildImageFallback(context, alt, loading: false);
-        },
+      child: GestureDetector(
+        onTap: () => _showImageViewer(context, resolved, label),
+        child: Image.network(
+          resolved,
+          cacheWidth: cacheWidth,
+          semanticLabel: label,
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            return _buildImageFallback(context, alt, loading: true);
+          },
+          errorBuilder: (context, error, stackTrace) {
+            return _buildImageFallback(context, alt, loading: false);
+          },
+        ),
       ),
     );
   }

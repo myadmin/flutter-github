@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:gh_explorer/api/issue.dart';
 import 'package:gh_explorer/components/common/app_error_view.dart';
 import 'package:gh_explorer/components/common/hm_bottom_bar.dart';
@@ -9,6 +10,7 @@ import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/issue.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
+import 'package:gh_explorer/stores/user_controller.dart';
 import 'package:gh_explorer/utils/formatters.dart';
 import 'package:gh_explorer/utils/paged_list.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
@@ -32,7 +34,11 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _keywordController = TextEditingController();
 
+  UserController? get _userController =>
+      Get.isRegistered<UserController>() ? Get.find<UserController>() : null;
+
   String _state = 'open';
+  IssueKindFilter _kind = IssueKindFilter.all;
   String _activeQuery = '';
   int? _searchTotalCount;
 
@@ -46,12 +52,33 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
               widget.repoName,
               keyword: _activeQuery,
               state: _state,
+              kind: _kind,
               page: page,
               onTotalCount: (total) {
                 if (mounted) {
                   setState(() => _searchTotalCount = total);
                 }
               },
+              cancelToken: _list.cancelToken,
+            );
+          }
+          if (_kind == IssueKindFilter.pr) {
+            return getRepoPullsAPI(
+              widget.owner,
+              widget.repoName,
+              state: _state,
+              page: page,
+              cancelToken: _list.cancelToken,
+            );
+          }
+          if (_kind == IssueKindFilter.issue) {
+            return searchRepoIssuesAPI(
+              widget.owner,
+              widget.repoName,
+              keyword: '',
+              state: _state,
+              kind: IssueKindFilter.issue,
+              page: page,
               cancelToken: _list.cancelToken,
             );
           }
@@ -69,11 +96,14 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
         },
       );
 
+  bool get _hasValidArgs =>
+      widget.owner.trim().isNotEmpty && widget.repoName.trim().isNotEmpty;
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    if (widget.owner.isNotEmpty && widget.repoName.isNotEmpty) {
+    if (_hasValidArgs) {
       _list.refresh();
     }
   }
@@ -104,6 +134,44 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
     });
     _list.clear();
     _list.refresh();
+  }
+
+  /// 切换类型筛选（全部类型 / 仅 Issue / 仅 PR）
+  void _switchKind(IssueKindFilter next) {
+    if (_kind == next) return;
+    setState(() {
+      _kind = next;
+      _searchTotalCount = null;
+    });
+    _list.clear();
+    _list.refresh();
+  }
+
+  /// 打开新建 Issue 页面（未登录先跳登录，登录成功后自动继续）
+  Future<void> _openCreateIssue() async {
+    if (!_hasValidArgs) return;
+    final userCtrl = _userController;
+    if (userCtrl != null && !userCtrl.isLoggedIn) {
+      ToastUtils.showToast(context, '登录后即可新建 Issue');
+      await Navigator.pushNamed(context, AppRoutes.login);
+      if (!mounted || !userCtrl.isLoggedIn) return;
+    }
+    final result = await Navigator.pushNamed(
+      context,
+      AppRoutes.repoIssueCreate(widget.owner, widget.repoName),
+    );
+    if (!mounted) return;
+    if (result is IssueItem) {
+      await _list.refresh();
+    }
+  }
+
+  int? get _directIssueNumber {
+    final trimmed = _activeQuery.trim();
+    final match = RegExp(r'^#?(\d+)$').firstMatch(trimmed);
+    if (match == null) return null;
+    final n = int.tryParse(match.group(1) ?? '');
+    return (n != null && n > 0) ? n : null;
   }
 
   /// 在当前仓库全部 Issues 与 PR 中执行关键词检索
@@ -152,6 +220,14 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
         backgroundColor: context.appColors.pageBackground,
         foregroundColor: context.appColors.textPrimary,
         elevation: 0,
+        actions: [
+          if (_hasValidArgs)
+            IconButton(
+              onPressed: _openCreateIssue,
+              icon: const Icon(Icons.add),
+              tooltip: '新建 Issue',
+            ),
+        ],
       ),
       body: Center(
         child: ConstrainedBox(
@@ -257,6 +333,74 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
                           ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final item in IssueKindFilter.values) ...[
+                            ChoiceChip(
+                              label: Text(item.label),
+                              selected: _kind == item,
+                              visualDensity: VisualDensity.compact,
+                              onSelected: (_) => _switchKind(item),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (_directIssueNumber != null) ...[
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: () => Navigator.pushNamed(
+                          context,
+                          AppRoutes.repoIssueDetail(
+                            widget.owner,
+                            widget.repoName,
+                            _directIssueNumber!,
+                          ),
+                        ),
+                        borderRadius: BorderRadius.circular(AppRadius.small),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: context.appColors.primarySurface,
+                            borderRadius: BorderRadius.circular(
+                              AppRadius.small,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.bolt,
+                                size: 15,
+                                color: context.appColors.primary,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  '直达 #$_directIssueNumber 详情',
+                                  style: context.captionSmallStyle.copyWith(
+                                    color: context.appColors.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right,
+                                size: 16,
+                                color: context.appColors.primary,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -274,6 +418,9 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
   }
 
   Widget _buildBody() {
+    if (!_hasValidArgs) {
+      return const HmEmptyView(icon: Icons.adjust, title: '仓库信息缺失');
+    }
     if (_list.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -343,9 +490,9 @@ class _IssueCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = item.isOpen
-        ? context.appColors.success
-        : context.appColors.merged;
+    final statusColor = item.isMerged
+        ? context.appColors.merged
+        : (item.isOpen ? context.appColors.success : context.appColors.merged);
     return Material(
       color: context.appColors.cardBackground,
       borderRadius: BorderRadius.circular(AppRadius.card),
@@ -365,7 +512,7 @@ class _IssueCard extends StatelessWidget {
             children: [
               Icon(
                 item.isPullRequest
-                    ? Icons.merge_type
+                    ? (item.isMerged ? Icons.merge_type : Icons.call_merge)
                     : (item.isOpen ? Icons.adjust : Icons.check_circle_outline),
                 color: statusColor,
                 size: 20,

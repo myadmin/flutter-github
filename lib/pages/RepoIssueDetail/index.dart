@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:gh_explorer/api/issue.dart';
+import 'package:gh_explorer/components/Repo/gh_diff_patch_view.dart';
 import 'package:gh_explorer/components/common/app_error_view.dart';
 import 'package:gh_explorer/components/common/app_network_image.dart';
 import 'package:gh_explorer/components/common/gh_markdown_view.dart';
@@ -9,13 +10,15 @@ import 'package:gh_explorer/components/common/hm_empty_view.dart';
 import 'package:gh_explorer/constants/app_text_styles.dart';
 import 'package:gh_explorer/constants/app_theme.dart';
 import 'package:gh_explorer/models/issue.dart';
+import 'package:gh_explorer/models/repo.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
 import 'package:gh_explorer/stores/user_controller.dart';
 import 'package:gh_explorer/utils/api_exception.dart';
+import 'package:gh_explorer/utils/external_link.dart';
 import 'package:gh_explorer/utils/formatters.dart';
 import 'package:gh_explorer/utils/toast_utils.dart';
 
-/// Issue / PR 详情与评论页（已登录支持发表评论）
+/// Issue / PR 详情与评论页（支持 PR 分支/Diff 审查、合入，以及编辑、关开状态与发评论）
 class RepoIssueDetailPage extends StatefulWidget {
   const RepoIssueDetailPage({
     super.key,
@@ -37,6 +40,14 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
   final TextEditingController _commentController = TextEditingController();
 
   IssueItem? _issue;
+  PullRequestDetail? _prDetail;
+  List<CommitFileChange> _prFiles = const [];
+  int _prFilesPage = 0;
+  bool _prFilesLoading = false;
+  bool _prFilesHasMore = false;
+  String _prFilesError = '';
+  int _activeSectionTab = 0; // 0: 讨论, 1: 变更文件
+
   List<IssueComment> _comments = const [];
   int _commentsPage = 0;
   bool _commentsLoading = false;
@@ -44,6 +55,7 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
   String _commentsError = '';
   bool _isLoading = true;
   bool _submitting = false;
+  bool _updatingIssue = false;
   String _errorMessage = '';
 
   bool get _hasValidArgs =>
@@ -67,10 +79,7 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
     super.dispose();
   }
 
-  /// 加载 Issue 主体详情，主体成功后再异步加载评论
-  ///
-  /// 评论接口需要额外权限（私有仓库或限流时容易 403），因此与主体解耦：
-  /// 主体失败显示整页错误，评论失败只影响评论区并允许单独重试。
+  /// 加载 Issue 主体详情，主体成功后再异步加载评论及（若为 PR）PR 审查信息
   Future<void> _load() async {
     setState(() {
       _isLoading = _issue == null;
@@ -87,12 +96,86 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
         _issue = issue;
         _isLoading = false;
       });
-      await _reloadComments();
+      await Future.wait([
+        _reloadComments(),
+        if (issue.isPullRequest) _loadPullRequestInfo(),
+      ]);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
         _errorMessage = resolveErrorMessage(e, fallback: '加载 Issue 详情失败');
+      });
+    }
+  }
+
+  Future<void> _loadPullRequestInfo() async {
+    try {
+      final detail = await getPullRequestDetailAPI(
+        widget.owner,
+        widget.repoName,
+        widget.number,
+      );
+      if (!mounted) return;
+      setState(() => _prDetail = detail);
+    } catch (_) {
+      // PR 元数据读取失败时保留基础正文展示，不拖垮页面
+    }
+    await _reloadPrFiles();
+  }
+
+  Future<void> _reloadPrFiles() async {
+    if (_prFilesLoading) return;
+    setState(() {
+      _prFilesLoading = true;
+      _prFilesError = '';
+    });
+    try {
+      final page = await getPullRequestFilesAPI(
+        widget.owner,
+        widget.repoName,
+        widget.number,
+        page: 1,
+      );
+      if (!mounted) return;
+      setState(() {
+        _prFiles = page.items;
+        _prFilesPage = 1;
+        _prFilesHasMore = page.hasMore;
+        _prFilesLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _prFilesLoading = false;
+        _prFilesError = resolveErrorMessage(e, fallback: '变更文件加载失败');
+      });
+    }
+  }
+
+  Future<void> _loadMorePrFiles() async {
+    if (_prFilesLoading || !_prFilesHasMore) return;
+    final nextPage = _prFilesPage + 1;
+    setState(() => _prFilesLoading = true);
+    try {
+      final page = await getPullRequestFilesAPI(
+        widget.owner,
+        widget.repoName,
+        widget.number,
+        page: nextPage,
+      );
+      if (!mounted) return;
+      setState(() {
+        _prFiles = [..._prFiles, ...page.items];
+        _prFilesPage = nextPage;
+        _prFilesHasMore = page.hasMore;
+        _prFilesLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _prFilesLoading = false;
+        _prFilesError = resolveErrorMessage(e, fallback: '加载更多文件失败');
       });
     }
   }
@@ -180,6 +263,9 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
       _commentController.clear();
       setState(() {
         _comments = [..._comments, created];
+        _issue = _issue?.copyWith(
+          commentsCount: (_issue?.commentsCount ?? _comments.length - 1) + 1,
+        );
         _submitting = false;
       });
       ToastUtils.showToast(context, '评论已发送');
@@ -190,8 +276,202 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
     }
   }
 
+  Future<void> _toggleIssueState() async {
+    final issue = _issue;
+    if (issue == null || _updatingIssue) return;
+    final targetState = issue.isOpen ? 'closed' : 'open';
+    final actionText = issue.isOpen ? '关闭' : '重新打开';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('$actionText #${issue.number}'),
+        content: Text('确定要$actionText「${issue.title}」吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(actionText),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _updatingIssue = true);
+    try {
+      final updated = await updateRepoIssueAPI(
+        widget.owner,
+        widget.repoName,
+        widget.number,
+        state: targetState,
+      );
+      if (!mounted) return;
+      setState(() {
+        _issue = updated;
+        _updatingIssue = false;
+      });
+      ToastUtils.showToast(context, '已$actionText');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _updatingIssue = false);
+      ToastUtils.showToast(context, resolveErrorMessage(e, fallback: '更新状态失败'));
+    }
+  }
+
+  Future<void> _editIssueContent() async {
+    final issue = _issue;
+    if (issue == null || _updatingIssue) return;
+    final titleCtrl = TextEditingController(text: issue.title);
+    final bodyCtrl = TextEditingController(text: issue.body);
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('编辑 #${issue.number}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleCtrl,
+                  decoration: const InputDecoration(labelText: '标题'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: bodyCtrl,
+                  minLines: 4,
+                  maxLines: 8,
+                  decoration: const InputDecoration(labelText: '正文内容'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      if (titleCtrl.text.trim().isEmpty) {
+        ToastUtils.showToast(context, '标题不能为空');
+        return;
+      }
+      setState(() => _updatingIssue = true);
+      final updated = await updateRepoIssueAPI(
+        widget.owner,
+        widget.repoName,
+        widget.number,
+        title: titleCtrl.text.trim(),
+        body: bodyCtrl.text,
+      );
+      if (!mounted) return;
+      setState(() {
+        _issue = updated;
+        _updatingIssue = false;
+      });
+      ToastUtils.showToast(context, '已保存更新');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _updatingIssue = false);
+      ToastUtils.showToast(context, resolveErrorMessage(e, fallback: '保存修改失败'));
+    } finally {
+      titleCtrl.dispose();
+      bodyCtrl.dispose();
+    }
+  }
+
+  Future<void> _confirmAndMergePr() async {
+    final pr = _prDetail;
+    if (pr == null || _updatingIssue) return;
+    var method = 'merge';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('合并 PR #${pr.number}'),
+          content: RadioGroup<String>(
+            groupValue: method,
+            onChanged: (value) {
+              if (value != null) {
+                setDialogState(() => method = value);
+              }
+            },
+            child: const Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('请选择合并方式：'),
+                RadioListTile<String>(
+                  value: 'merge',
+                  title: Text('Merge commit'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                RadioListTile<String>(
+                  value: 'squash',
+                  title: Text('Squash and merge'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                RadioListTile<String>(
+                  value: 'rebase',
+                  title: Text('Rebase and merge'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('确认合并'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _updatingIssue = true);
+    try {
+      final result = await mergePullRequestAPI(
+        widget.owner,
+        widget.repoName,
+        widget.number,
+        mergeMethod: method,
+      );
+      if (!mounted) return;
+      ToastUtils.showToast(
+        context,
+        result.message.isEmpty ? 'Pull Request 已合并' : result.message,
+      );
+      setState(() => _updatingIssue = false);
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _updatingIssue = false);
+      ToastUtils.showToast(
+        context,
+        resolveErrorMessage(e, fallback: '合并 Pull Request 失败'),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final issue = _issue;
     return Scaffold(
       backgroundColor: context.appColors.pageBackground,
       appBar: AppBar(
@@ -200,6 +480,41 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
         backgroundColor: context.appColors.pageBackground,
         foregroundColor: context.appColors.textPrimary,
         elevation: 0,
+        actions: [
+          if (issue != null)
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                switch (value) {
+                  case 'open_browser':
+                    if (issue.htmlUrl.isNotEmpty) {
+                      openExternalUrl(issue.htmlUrl);
+                    }
+                  case 'edit':
+                    _editIssueContent();
+                  case 'toggle_state':
+                    _toggleIssueState();
+                }
+              },
+              itemBuilder: (context) => [
+                if (issue.htmlUrl.isNotEmpty)
+                  const PopupMenuItem<String>(
+                    value: 'open_browser',
+                    child: Text('在 GitHub 打开'),
+                  ),
+                if (_userController.isLoggedIn) ...[
+                  const PopupMenuItem<String>(
+                    value: 'edit',
+                    child: Text('编辑标题与正文'),
+                  ),
+                  if (!(_prDetail?.merged ?? false))
+                    PopupMenuItem<String>(
+                      value: 'toggle_state',
+                      child: Text(issue.isOpen ? '关闭' : '重新打开'),
+                    ),
+                ],
+              ],
+            ),
+        ],
       ),
       body: _buildBody(),
       bottomNavigationBar: _issue == null
@@ -268,6 +583,31 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
     }
     final issue = _issue!;
     final isOpen = issue.isOpen;
+    final pr = _prDetail;
+    final isMerged = pr?.merged ?? issue.isMerged;
+    final statusLabel = isMerged
+        ? 'Merged'
+        : (pr != null && pr.draft && isOpen
+              ? 'Draft'
+              : (isOpen ? 'Open' : 'Closed'));
+    final statusFg = isMerged
+        ? context.appColors.merged
+        : (pr != null && pr.draft && isOpen
+              ? context.appColors.textSecondary
+              : (isOpen
+                    ? context.appColors.success
+                    : context.appColors.merged));
+    final statusBg = isMerged
+        ? context.appColors.mergedSurface
+        : (pr != null && pr.draft && isOpen
+              ? context.appColors.inputFill
+              : (isOpen
+                    ? context.appColors.successSurface
+                    : context.appColors.mergedSurface));
+    final displayCommentCount = _comments.length > issue.commentsCount
+        ? _comments.length
+        : issue.commentsCount;
+
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(
@@ -292,7 +632,10 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
                   children: [
                     Text(issue.title, style: context.sectionTitleStyle),
                     const SizedBox(height: 8),
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -300,28 +643,27 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: isOpen
-                                ? context.appColors.successSurface
-                                : context.appColors.mergedSurface,
+                            color: statusBg,
                             borderRadius: BorderRadius.circular(AppRadius.pill),
                           ),
                           child: Text(
-                            isOpen ? 'Open' : 'Closed',
+                            statusLabel,
                             style: context.captionSmallStyle.copyWith(
-                              color: isOpen
-                                  ? context.appColors.success
-                                  : context.appColors.merged,
+                              color: statusFg,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
                         Text(
                           '${issue.user.login} 创建于 ${formatRelativeTime(issue.createdAt)}',
                           style: context.captionStyle,
                         ),
                       ],
                     ),
+                    if (pr != null) ...[
+                      const SizedBox(height: 10),
+                      _buildPrSummaryCard(pr),
+                    ],
                     if (issue.body.trim().isNotEmpty) ...[
                       Divider(height: 20, color: context.appColors.divider),
                       GhMarkdownView(
@@ -334,82 +676,256 @@ class _RepoIssueDetailPageState extends State<RepoIssueDetailPage> {
                 ),
               ),
               const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: Text(
-                  '评论 (${_comments.length}${_commentsHasMore ? '+' : ''})',
-                  style: context.bodyStrongStyle,
-                ),
-              ),
-              const SizedBox(height: 6),
-              if (_commentsError.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: context.appColors.cardBackground,
-                    borderRadius: BorderRadius.circular(AppRadius.card),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _commentsError,
-                          style: context.captionStyle,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _reloadComments,
-                        child: const Text('重试'),
-                      ),
-                    ],
-                  ),
-                )
-              else if (_comments.isEmpty && !_commentsLoading)
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: context.appColors.cardBackground,
-                    borderRadius: BorderRadius.circular(AppRadius.card),
-                  ),
-                  child: Center(
-                    child: Text('暂无评论', style: context.captionStyle),
-                  ),
-                )
-              else
-                for (final comment in _comments) ...[
-                  _CommentCard(
-                    comment: comment,
-                    owner: widget.owner,
-                    repoName: widget.repoName,
-                  ),
-                  const SizedBox(height: 10),
-                ],
-              if (_commentsLoading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Center(
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+              if (issue.isPullRequest) ...[
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: Text('讨论 ($displayCommentCount)'),
+                      selected: _activeSectionTab == 0,
+                      onSelected: (_) => setState(() => _activeSectionTab = 0),
                     ),
-                  ),
-                )
-              else if (_commentsHasMore)
+                    ChoiceChip(
+                      label: Text(
+                        '变更文件 (${pr?.changedFiles ?? _prFiles.length})',
+                      ),
+                      selected: _activeSectionTab == 1,
+                      onSelected: (_) => setState(() => _activeSectionTab = 1),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+              ] else ...[
                 Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Center(
-                    child: OutlinedButton(
-                      onPressed: _loadMoreComments,
-                      child: const Text('加载更多评论'),
-                    ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    '评论 ($displayCommentCount)',
+                    style: context.bodyStrongStyle,
                   ),
                 ),
+                const SizedBox(height: 6),
+              ],
+              if (issue.isPullRequest && _activeSectionTab == 1)
+                ..._buildPrFilesSection(pr)
+              else
+                ..._buildCommentsSection(),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildPrSummaryCard(PullRequestDetail pr) {
+    final colors = context.appColors;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.inputFill.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(AppRadius.small),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.alt_route, size: 15, color: colors.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '${pr.headRef} → ${pr.baseRef}',
+                  style: context.monoSmallStyle.copyWith(
+                    color: colors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 10,
+            runSpacing: 4,
+            children: [
+              Text('${pr.commits} 次提交', style: context.captionSmallStyle),
+              Text(
+                '+${pr.additions}',
+                style: context.captionSmallStyle.copyWith(
+                  color: colors.success,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                '-${pr.deletions}',
+                style: context.captionSmallStyle.copyWith(
+                  color: colors.badge,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text('${pr.changedFiles} 个文件', style: context.captionSmallStyle),
+            ],
+          ),
+          if (_userController.isLoggedIn &&
+              pr.isOpen &&
+              !pr.merged &&
+              !pr.draft) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 34,
+              child: ElevatedButton.icon(
+                onPressed: _updatingIssue ? null : _confirmAndMergePr,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colors.success,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: const StadiumBorder(),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
+                icon: const Icon(Icons.merge_type, size: 16),
+                label: const Text(
+                  '合并 Pull Request',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildPrFilesSection(PullRequestDetail? pr) {
+    final headRef = pr?.headSha.isNotEmpty == true
+        ? pr!.headSha
+        : (pr?.headRef ?? '');
+    return [
+      if (_prFilesError.isNotEmpty)
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: context.appColors.cardBackground,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
+          child: Row(
+            children: [
+              Expanded(child: Text(_prFilesError, style: context.captionStyle)),
+              TextButton(onPressed: _reloadPrFiles, child: const Text('重试')),
+            ],
+          ),
+        )
+      else if (_prFiles.isEmpty && !_prFilesLoading)
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: context.appColors.cardBackground,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
+          child: Center(child: Text('暂无变更文件', style: context.captionStyle)),
+        )
+      else
+        for (final file in _prFiles) ...[
+          GhDiffFileCard(
+            file: file,
+            initiallyExpanded: _prFiles.length <= 10,
+            onViewFile: headRef.isEmpty
+                ? null
+                : () => Navigator.pushNamed(
+                    context,
+                    AppRoutes.repoFileView(
+                      widget.owner,
+                      widget.repoName,
+                      path: file.filename,
+                      ref: headRef,
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 10),
+        ],
+      if (_prFilesLoading)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        )
+      else if (_prFilesHasMore)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Center(
+            child: OutlinedButton(
+              onPressed: _loadMorePrFiles,
+              child: const Text('加载更多变更文件'),
+            ),
+          ),
+        ),
+    ];
+  }
+
+  List<Widget> _buildCommentsSection() {
+    return [
+      if (_commentsError.isNotEmpty)
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: context.appColors.cardBackground,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(_commentsError, style: context.captionStyle),
+              ),
+              TextButton(onPressed: _reloadComments, child: const Text('重试')),
+            ],
+          ),
+        )
+      else if (_comments.isEmpty && !_commentsLoading)
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: context.appColors.cardBackground,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
+          child: Center(child: Text('暂无评论', style: context.captionStyle)),
+        )
+      else
+        for (final comment in _comments) ...[
+          _CommentCard(
+            comment: comment,
+            owner: widget.owner,
+            repoName: widget.repoName,
+          ),
+          const SizedBox(height: 10),
+        ],
+      if (_commentsLoading)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        )
+      else if (_commentsHasMore)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Center(
+            child: OutlinedButton(
+              onPressed: _loadMoreComments,
+              child: const Text('加载更多评论'),
+            ),
+          ),
+        ),
+    ];
   }
 }
 

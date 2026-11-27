@@ -8,7 +8,9 @@ import 'package:gh_explorer/constants/explore_config.dart';
 import 'package:gh_explorer/routes/app_routes.dart';
 import 'package:gh_explorer/routes/index.dart';
 import 'package:gh_explorer/stores/explore_tags_controller.dart';
+import 'package:gh_explorer/stores/footprint_store.dart';
 import 'package:gh_explorer/stores/rate_limit_controller.dart';
+import 'package:gh_explorer/stores/search_history_store.dart';
 import 'package:gh_explorer/stores/star_sync_controller.dart';
 import 'package:gh_explorer/stores/theme_controller.dart';
 import 'package:gh_explorer/stores/token_manager.dart';
@@ -150,6 +152,8 @@ MockAdapter installAuthMock(
 registerTestControllers() {
   Get.reset();
   ExploreShowcaseCache.clear();
+  FootprintStore.resetForTest();
+  SearchHistoryStore.resetForTest();
   tokenManager.secretStore = InMemorySecretStore();
   final user = Get.put(UserController(), permanent: true);
   final starSync = Get.put(StarSyncController(), permanent: true);

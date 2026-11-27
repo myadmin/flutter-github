@@ -128,6 +128,44 @@ class NotificationItem {
     return parts.length >= 2 ? parts[1] : '';
   }
 
+  /// 从 API URL 解析关联 Issue 或 PR 编号（如 `/issues/42` 或 `/pulls/12`）
+  int? get subjectNumber {
+    final match = RegExp(r'/(?:issues|pulls)/(\d+)$').firstMatch(subjectUrl);
+    if (match == null) return null;
+    final n = int.tryParse(match.group(1) ?? '');
+    return (n != null && n > 0) ? n : null;
+  }
+
+  /// 从 API URL 解析关联 Commit SHA（如 `/commits/abc1234`）
+  String get subjectCommitSha {
+    final match = RegExp(r'/commits/([0-9a-fA-F]+)$').firstMatch(subjectUrl);
+    return match?.group(1) ?? '';
+  }
+
+  /// 将 GitHub 通知原因翻译为中文标签
+  String get reasonLabel {
+    switch (reason.toLowerCase()) {
+      case 'mention':
+        return '提及了你';
+      case 'author':
+        return '你发起的';
+      case 'comment':
+        return '新评论';
+      case 'assign':
+        return '指派给你';
+      case 'review_requested':
+        return '请求代码审查';
+      case 'state_change':
+        return '状态变更';
+      case 'subscribed':
+        return '订阅动态';
+      case 'team_mention':
+        return '团队提及';
+      default:
+        return reason;
+    }
+  }
+
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
     final subject = asMapOrEmpty(json['subject']);
     final repo = asMapOrEmpty(json['repository']);

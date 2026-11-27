@@ -30,6 +30,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
   final ScrollController _scrollController = ScrollController();
 
   bool _showAll = false;
+  bool _participatingOnly = false;
   final Set<String> _locallyReadIds = <String>{};
 
   late final PagedListController<NotificationItem> _list =
@@ -37,6 +38,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
         pageSize: GlobalConstants.defaultPageSize,
         loader: (page) => getNotificationsAPI(
           all: _showAll,
+          participating: _participatingOnly,
           page: page,
           cancelToken: _list.cancelToken,
         ),
@@ -71,10 +73,17 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
   }
 
-  /// 切换「仅未读 / 全部通知」过滤并重新拉取
-  void _switchFilter(bool showAll) {
-    if (_showAll == showAll) return;
-    setState(() => _showAll = showAll);
+  /// 切换「仅未读 / 全部通知」与「仅与我相关」过滤并重新拉取
+  void _switchFilter({bool? showAll, bool? participatingOnly}) {
+    final nextShowAll = showAll ?? _showAll;
+    final nextParticipating = participatingOnly ?? _participatingOnly;
+    if (nextShowAll == _showAll && nextParticipating == _participatingOnly) {
+      return;
+    }
+    setState(() {
+      _showAll = nextShowAll;
+      _participatingOnly = nextParticipating;
+    });
     _list.clear();
     _list.refresh();
   }
@@ -92,7 +101,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
   }
 
-  /// 点击通知条：先标为已读（含本地即时反馈），再跳往关联仓库详情页
+  /// 点击通知条：先标为已读（含本地即时反馈），再按 subject 精准跳往目标详情页
   Future<void> _openNotification(NotificationItem item) async {
     if (item.unread && !_locallyReadIds.contains(item.id)) {
       setState(() => _locallyReadIds.add(item.id));
@@ -101,12 +110,31 @@ class _NotificationsPageState extends State<NotificationsPage> {
       } catch (_) {}
     }
     if (!mounted) return;
-    if (item.repoOwner.isNotEmpty && item.repoName.isNotEmpty) {
+    final owner = item.repoOwner;
+    final repo = item.repoName;
+    if (owner.isEmpty || repo.isEmpty) return;
+
+    final num = item.subjectNumber;
+    if (num != null) {
       await Navigator.pushNamed(
         context,
-        AppRoutes.repoDetail(item.repoOwner, item.repoName),
+        AppRoutes.repoIssueDetail(owner, repo, num),
       );
+      return;
     }
+    final sha = item.subjectCommitSha;
+    if (sha.isNotEmpty) {
+      await Navigator.pushNamed(
+        context,
+        AppRoutes.repoCommitDetail(owner, repo, sha),
+      );
+      return;
+    }
+    if (item.subjectType.toLowerCase() == 'release') {
+      await Navigator.pushNamed(context, AppRoutes.repoReleases(owner, repo));
+      return;
+    }
+    await Navigator.pushNamed(context, AppRoutes.repoDetail(owner, repo));
   }
 
   @override
@@ -153,12 +181,17 @@ class _NotificationsPageState extends State<NotificationsPage> {
                       ChoiceChip(
                         label: const Text('仅未读'),
                         selected: !_showAll,
-                        onSelected: (_) => _switchFilter(false),
+                        onSelected: (_) => _switchFilter(showAll: false),
                       ),
                       ChoiceChip(
                         label: const Text('全部通知'),
                         selected: _showAll,
-                        onSelected: (_) => _switchFilter(true),
+                        onSelected: (_) => _switchFilter(showAll: true),
+                      ),
+                      FilterChip(
+                        label: const Text('与我相关'),
+                        selected: _participatingOnly,
+                        onSelected: (v) => _switchFilter(participatingOnly: v),
                       ),
                     ],
                   ),
@@ -278,7 +311,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${item.subjectType} · ${item.reason}',
+                            '${item.subjectType} · ${item.reasonLabel}',
                             style: context.captionSmallStyle,
                           ),
                         ],
