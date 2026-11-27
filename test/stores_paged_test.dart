@@ -248,6 +248,30 @@ void main() {
     ctrl.dispose();
   });
 
+  test('PagedListController 刷新与销毁会取消在途请求令牌', () async {
+    final ctrl = PagedListController<int>(
+      pageSize: 2,
+      loader: (page) async =>
+          const PageResult<int>(items: [1], page: 1, hasMore: false),
+    );
+
+    final first = ctrl.cancelToken;
+    expect(first.isCancelled, isFalse);
+
+    await ctrl.refresh();
+    final second = ctrl.cancelToken;
+    expect(identical(first, second), isFalse, reason: '刷新应换一枚新令牌');
+    expect(first.isCancelled, isTrue, reason: '旧令牌需要被取消');
+    expect(second.isCancelled, isFalse);
+
+    ctrl.clear();
+    final third = ctrl.cancelToken;
+    expect(second.isCancelled, isTrue, reason: 'clear 同样取消在途请求');
+
+    ctrl.dispose();
+    expect(third.isCancelled, isTrue, reason: '销毁时取消未完成请求');
+  });
+
   test('TokenManager 将历史明文令牌迁移到安全存储并清除明文', () async {
     SharedPreferences.setMockInitialValues({
       'gh_explorer_token': 'ghp_legacy',

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/event.dart';
 import 'package:gh_explorer/models/parsers.dart';
@@ -9,12 +10,14 @@ Future<PageResult<GithubEvent>> getReceivedEventsAPI(
   String username, {
   int page = 1,
   int perPage = GlobalConstants.defaultPageSize,
+  CancelToken? cancelToken,
 }) async {
   final encoded = Uri.encodeComponent(username.trim());
   final res = await dioRequest.getPaged(
     '${HttpConstants.users}/$encoded/received_events',
     params: {'page': page, 'per_page': perPage},
     perPage: perPage,
+    cancelToken: cancelToken,
   );
   return PageResult<GithubEvent>(
     items: asModelList(res.data, GithubEvent.fromJson),
@@ -28,11 +31,13 @@ Future<PageResult<NotificationItem>> getNotificationsAPI({
   bool all = false,
   int page = 1,
   int perPage = GlobalConstants.defaultPageSize,
+  CancelToken? cancelToken,
 }) async {
   final res = await dioRequest.getPaged(
     HttpConstants.notifications,
     params: {'all': all, 'page': page, 'per_page': perPage},
     perPage: perPage,
+    cancelToken: cancelToken,
   );
   return PageResult<NotificationItem>(
     items: asModelList(res.data, NotificationItem.fromJson),

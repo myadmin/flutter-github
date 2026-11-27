@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:gh_explorer/utils/api_exception.dart';
 
@@ -52,6 +53,13 @@ class PagedListController<T> extends ChangeNotifier {
   /// 避免旧查询结果覆盖新列表（搜索词/筛选条件/仓库分支切换等场景）。
   int _epoch = 0;
 
+  /// 与当前代际绑定的取消令牌：refresh / clear / dispose 时取消在途请求，
+  /// 页面退出或切换筛选后不再占用带宽与 API 配额。
+  CancelToken _cancelToken = CancelToken();
+
+  /// 供页面在 loader 中透传给 API：`cancelToken: _list.cancelToken`
+  CancelToken get cancelToken => _cancelToken;
+
   List<T> get items => UnmodifiableListView<T>(_items);
 
   int get length => _items.length;
@@ -74,6 +82,7 @@ class PagedListController<T> extends ChangeNotifier {
   /// 首次加载或下拉刷新
   Future<void> refresh() async {
     if (_disposed) return;
+    _cancelInFlight();
     final int epoch = ++_epoch;
     _refreshing = true;
     _isLoading = _items.isEmpty;
@@ -121,6 +130,7 @@ class PagedListController<T> extends ChangeNotifier {
   /// 清空列表与状态
   void clear() {
     if (_disposed) return;
+    _cancelInFlight();
     _epoch++; // 作废在途请求，防止旧页数据回填
     _refreshing = false;
     _items.clear();
@@ -131,6 +141,12 @@ class PagedListController<T> extends ChangeNotifier {
     _hasMore = true;
     _errorMessage = '';
     notifyListeners();
+  }
+
+  /// 取消当前代际的在途请求，并换上一枚新的取消令牌
+  void _cancelInFlight() {
+    _cancelToken.cancel();
+    _cancelToken = CancelToken();
   }
 
   Future<void> _fetch({
@@ -178,6 +194,7 @@ class PagedListController<T> extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _cancelToken.cancel();
     super.dispose();
   }
 }

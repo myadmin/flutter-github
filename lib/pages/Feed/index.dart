@@ -33,8 +33,11 @@ class _FeedViewState extends State<FeedView> {
   late final PagedListController<GithubEvent> _list =
       PagedListController<GithubEvent>(
         pageSize: GlobalConstants.defaultPageSize,
-        loader: (page) =>
-            getReceivedEventsAPI(_userController.user.value.login, page: page),
+        loader: (page) => getReceivedEventsAPI(
+          _userController.user.value.login,
+          page: page,
+          cancelToken: _list.cancelToken,
+        ),
         firstPageErrorFallback: '加载关注动态失败',
         onLoadMoreError: (msg) {
           if (mounted) ToastUtils.showToast(context, msg);

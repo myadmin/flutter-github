@@ -80,6 +80,7 @@ class _ExploreViewState extends State<ExploreView> {
             sort: _feedMode.sortField,
             order: 'desc',
             page: page,
+            cancelToken: _list.cancelToken,
           );
         },
         firstPageErrorFallback: '加载热门项目失败',

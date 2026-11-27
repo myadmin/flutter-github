@@ -32,7 +32,11 @@ class _MyReposPageState extends State<MyReposPage> {
   late final PagedListController<RepoItem> _list =
       PagedListController<RepoItem>(
         pageSize: GlobalConstants.defaultPageSize,
-        loader: (page) => getMyReposAPI(page: page, visibility: _visibility),
+        loader: (page) => getMyReposAPI(
+          page: page,
+          visibility: _visibility,
+          cancelToken: _list.cancelToken,
+        ),
         firstPageErrorFallback: '加载仓库列表失败',
         onLoadMoreError: (msg) {
           if (mounted) ToastUtils.showToast(context, msg);

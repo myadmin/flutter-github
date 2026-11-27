@@ -44,7 +44,11 @@ class _UserDetailPageState extends State<UserDetailPage> {
   late final PagedListController<RepoItem> _reposList =
       PagedListController<RepoItem>(
         pageSize: GlobalConstants.defaultPageSize,
-        loader: (page) => getUserReposAPI(widget.login, page: page),
+        loader: (page) => getUserReposAPI(
+          widget.login,
+          page: page,
+          cancelToken: _reposList.cancelToken,
+        ),
         firstPageErrorFallback: '加载仓库失败',
         onLoadMoreError: (msg) {
           if (mounted) ToastUtils.showToast(context, msg);
@@ -54,7 +58,11 @@ class _UserDetailPageState extends State<UserDetailPage> {
   late final PagedListController<RepoItem> _starsList =
       PagedListController<RepoItem>(
         pageSize: GlobalConstants.defaultPageSize,
-        loader: (page) => getUserStarredReposAPI(widget.login, page: page),
+        loader: (page) => getUserStarredReposAPI(
+          widget.login,
+          page: page,
+          cancelToken: _starsList.cancelToken,
+        ),
         firstPageErrorFallback: '加载 Star 项目失败',
         onLoadMoreError: (msg) {
           if (mounted) ToastUtils.showToast(context, msg);

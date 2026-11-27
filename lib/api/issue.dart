@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:dio/dio.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/issue.dart';
 import 'package:gh_explorer/models/parsers.dart';
@@ -72,6 +73,7 @@ Future<PageResult<IssueItem>> searchRepoIssuesAPI(
   int page = 1,
   int perPage = GlobalConstants.defaultPageSize,
   void Function(int totalCount)? onTotalCount,
+  CancelToken? cancelToken,
 }) async {
   final q = buildRepoIssueSearchQuery(
     owner: owner,
@@ -83,6 +85,7 @@ Future<PageResult<IssueItem>> searchRepoIssuesAPI(
     await dioRequest.get(
       HttpConstants.searchIssues,
       params: {'q': q, 'order': 'desc', 'page': page, 'per_page': perPage},
+      cancelToken: cancelToken,
     ),
   );
   final totalCount = asInt(raw['total_count']);
@@ -100,11 +103,13 @@ Future<PageResult<IssueItem>> getRepoIssuesAPI(
   String state = 'open',
   int page = 1,
   int perPage = GlobalConstants.defaultPageSize,
+  CancelToken? cancelToken,
 }) async {
   final res = await dioRequest.getPaged(
     _issuesBase(owner, repo),
     params: {'state': state, 'page': page, 'per_page': perPage},
     perPage: perPage,
+    cancelToken: cancelToken,
   );
   return PageResult<IssueItem>(
     items: asModelList(res.data, IssueItem.fromJson),
@@ -130,11 +135,13 @@ Future<PageResult<IssueComment>> getIssueCommentsAPI(
   int number, {
   int page = 1,
   int perPage = 30,
+  CancelToken? cancelToken,
 }) async {
   final res = await dioRequest.getPaged(
     '${_issuesBase(owner, repo)}/$number/comments',
     params: {'page': page, 'per_page': perPage},
     perPage: perPage,
+    cancelToken: cancelToken,
   );
   return PageResult<IssueComment>(
     items: asModelList(res.data, IssueComment.fromJson),

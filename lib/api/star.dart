@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/parsers.dart';
 import 'package:gh_explorer/models/repo.dart';
@@ -28,6 +29,7 @@ Future<PageResult<RepoItem>> getMyStarredReposAPI({
   int page = 1,
   int perPage = GlobalConstants.defaultPageSize,
   String sort = 'created',
+  CancelToken? cancelToken,
 }) async {
   final res = await dioRequest.getPaged(
     HttpConstants.userStarred,
@@ -38,6 +40,7 @@ Future<PageResult<RepoItem>> getMyStarredReposAPI({
       'direction': 'desc',
     },
     perPage: perPage,
+    cancelToken: cancelToken,
   );
   return PageResult<RepoItem>(
     items: asModelList(res.data, RepoItem.fromJson),
@@ -51,12 +54,14 @@ Future<PageResult<RepoItem>> getUserStarredReposAPI(
   String login, {
   int page = 1,
   int perPage = GlobalConstants.defaultPageSize,
+  CancelToken? cancelToken,
 }) async {
   final encoded = Uri.encodeComponent(login.trim());
   final res = await dioRequest.getPaged(
     '${HttpConstants.users}/$encoded/starred',
     params: {'page': page, 'per_page': perPage},
     perPage: perPage,
+    cancelToken: cancelToken,
   );
   return PageResult<RepoItem>(
     items: asModelList(res.data, RepoItem.fromJson),

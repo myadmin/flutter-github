@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:gh_explorer/api/auth.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/parsers.dart';
@@ -29,6 +30,7 @@ Future<PageResult<RepoItem>> getMyReposAPI({
   String affiliation = 'owner,collaborator,organization_member',
   String visibility = 'all',
   String sort = 'updated',
+  CancelToken? cancelToken,
 }) async {
   final res = await dioRequest.getPaged(
     HttpConstants.userRepos,
@@ -41,6 +43,7 @@ Future<PageResult<RepoItem>> getMyReposAPI({
       'direction': 'desc',
     },
     perPage: perPage,
+    cancelToken: cancelToken,
   );
   return PageResult<RepoItem>(
     items: asModelList(res.data, RepoItem.fromJson),
@@ -55,6 +58,7 @@ Future<PageResult<RepoItem>> getUserReposAPI(
   int page = 1,
   int perPage = GlobalConstants.defaultPageSize,
   String sort = 'updated',
+  CancelToken? cancelToken,
 }) async {
   final encoded = Uri.encodeComponent(login.trim());
   final res = await dioRequest.getPaged(
@@ -66,6 +70,7 @@ Future<PageResult<RepoItem>> getUserReposAPI(
       'direction': 'desc',
     },
     perPage: perPage,
+    cancelToken: cancelToken,
   );
   return PageResult<RepoItem>(
     items: asModelList(res.data, RepoItem.fromJson),
@@ -79,12 +84,14 @@ Future<PageResult<RepoOwner>> getUserFollowersAPI(
   String login, {
   int page = 1,
   int perPage = GlobalConstants.defaultPageSize,
+  CancelToken? cancelToken,
 }) async {
   final encoded = Uri.encodeComponent(login.trim());
   final res = await dioRequest.getPaged(
     '${HttpConstants.users}/$encoded/followers',
     params: {'page': page, 'per_page': perPage},
     perPage: perPage,
+    cancelToken: cancelToken,
   );
   return PageResult<RepoOwner>(
     items: asModelList(res.data, RepoOwner.fromJson),
@@ -98,12 +105,14 @@ Future<PageResult<RepoOwner>> getUserFollowingAPI(
   String login, {
   int page = 1,
   int perPage = GlobalConstants.defaultPageSize,
+  CancelToken? cancelToken,
 }) async {
   final encoded = Uri.encodeComponent(login.trim());
   final res = await dioRequest.getPaged(
     '${HttpConstants.users}/$encoded/following',
     params: {'page': page, 'per_page': perPage},
     perPage: perPage,
+    cancelToken: cancelToken,
   );
   return PageResult<RepoOwner>(
     items: asModelList(res.data, RepoOwner.fromJson),

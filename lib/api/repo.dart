@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/parsers.dart';
 import 'package:gh_explorer/models/repo.dart';
@@ -125,6 +126,7 @@ Future<PageResult<CommitItem>> getRepoCommitsAPI(
   String branch = '',
   int page = 1,
   int perPage = GlobalConstants.defaultPageSize,
+  CancelToken? cancelToken,
 }) async {
   final params = <String, dynamic>{'page': page, 'per_page': perPage};
   if (branch.isNotEmpty) {
@@ -134,6 +136,7 @@ Future<PageResult<CommitItem>> getRepoCommitsAPI(
     '${_repoBase(owner, repo)}/commits',
     params: params,
     perPage: perPage,
+    cancelToken: cancelToken,
   );
   return PageResult<CommitItem>(
     items: asModelList(res.data, CommitItem.fromJson),

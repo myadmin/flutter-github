@@ -154,6 +154,10 @@ class DioRequest {
 
   /// 将 Dio 底层错误码与异常类型翻译为面向用户的中文业务/网络异常
   Future<Exception> _translateError(DioException error) async {
+    if (error.type == DioExceptionType.cancel) {
+      return const RequestCancelledException();
+    }
+
     if (error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.sendTimeout ||
         error.type == DioExceptionType.receiveTimeout) {
@@ -248,11 +252,13 @@ class DioRequest {
     Map<String, dynamic>? params,
     Map<String, dynamic>? headers,
     bool skipAuthRedirect = false,
+    CancelToken? cancelToken,
   }) async {
     final res = await _execute(
       () => _dio.get<dynamic>(
         url,
         queryParameters: params,
+        cancelToken: cancelToken,
         options: Options(
           headers: headers,
           extra: {_extraSkipAuthRedirect: skipAuthRedirect},
@@ -286,9 +292,14 @@ class DioRequest {
     String url, {
     Map<String, dynamic>? params,
     int perPage = GlobalConstants.defaultPageSize,
+    CancelToken? cancelToken,
   }) async {
     final res = await _execute(
-      () => _dio.get<dynamic>(url, queryParameters: params),
+      () => _dio.get<dynamic>(
+        url,
+        queryParameters: params,
+        cancelToken: cancelToken,
+      ),
     );
     final linkHeader = res.headers.value('link');
     final hasLinkNext = parseHasNextPage(linkHeader);

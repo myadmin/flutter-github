@@ -68,8 +68,12 @@ class _SearchViewState extends State<SearchView> {
   late final PagedListController<RepoItem> _repoList =
       PagedListController<RepoItem>(
         pageSize: GlobalConstants.defaultPageSize,
-        loader: (page) =>
-            searchReposAPI(query: _activeQuery, sort: _repoSort, page: page),
+        loader: (page) => searchReposAPI(
+          query: _activeQuery,
+          sort: _repoSort,
+          page: page,
+          cancelToken: _repoList.cancelToken,
+        ),
         firstPageErrorFallback: '搜索仓库失败',
         onLoadMoreError: (msg) {
           if (mounted) ToastUtils.showToast(context, msg);
@@ -79,8 +83,12 @@ class _SearchViewState extends State<SearchView> {
   late final PagedListController<RepoOwner> _userList =
       PagedListController<RepoOwner>(
         pageSize: GlobalConstants.defaultPageSize,
-        loader: (page) =>
-            searchUsersAPI(query: _activeQuery, sort: _userSort, page: page),
+        loader: (page) => searchUsersAPI(
+          query: _activeQuery,
+          sort: _userSort,
+          page: page,
+          cancelToken: _userList.cancelToken,
+        ),
         firstPageErrorFallback: '搜索用户失败',
         onLoadMoreError: (msg) {
           if (mounted) ToastUtils.showToast(context, msg);

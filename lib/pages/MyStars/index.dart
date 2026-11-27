@@ -34,7 +34,10 @@ class _MyStarsPageState extends State<MyStarsPage> {
       PagedListController<RepoItem>(
         pageSize: GlobalConstants.defaultPageSize,
         loader: (page) async {
-          final res = await getMyStarredReposAPI(page: page);
+          final res = await getMyStarredReposAPI(
+            page: page,
+            cancelToken: _list.cancelToken,
+          );
           for (final repo in res.items) {
             _starSync.setSnapshot(
               repo.fullName,

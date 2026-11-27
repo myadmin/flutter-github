@@ -30,10 +30,21 @@ class NetworkException implements Exception {
   String toString() => 'NetworkException(message: $message)';
 }
 
+/// 请求被主动取消：页面销毁、刷新或切换筛选时放弃在途请求，不应提示用户。
+class RequestCancelledException implements Exception {
+  const RequestCancelledException([this.message = '请求已取消']);
+
+  final String message;
+
+  @override
+  String toString() => 'RequestCancelledException(message: $message)';
+}
+
 /// 从任意异常中提取面向用户的中文提示文案。
 String resolveErrorMessage(Object error, {String? fallback}) {
   if (error is ApiException) return error.message;
   if (error is NetworkException) return error.message;
+  if (error is RequestCancelledException) return error.message;
   if (error is FormatException) return '数据格式异常，请稍后重试';
   return fallback ?? '网络或服务异常，请稍后重试';
 }

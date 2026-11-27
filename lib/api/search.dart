@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:dio/dio.dart';
 import 'package:gh_explorer/constants/index.dart';
 import 'package:gh_explorer/models/parsers.dart';
 import 'package:gh_explorer/models/repo.dart';
@@ -83,6 +84,7 @@ Future<PageResult<RepoItem>> searchReposAPI({
   String order = 'desc',
   int page = 1,
   int perPage = GlobalConstants.defaultPageSize,
+  CancelToken? cancelToken,
 }) async {
   final trimmed = query.trim();
   final lang = language.trim();
@@ -103,6 +105,7 @@ Future<PageResult<RepoItem>> searchReposAPI({
   final raw = await dioRequest.get(
     HttpConstants.searchRepositories,
     params: params,
+    cancelToken: cancelToken,
   );
   final result = RepoSearchResult.fromJson(asMap(raw));
   // GitHub Search API 限制单次检索最多返回前 1000 条结果
@@ -122,6 +125,7 @@ Future<PageResult<RepoOwner>> searchUsersAPI({
   String order = 'desc',
   int page = 1,
   int perPage = GlobalConstants.defaultPageSize,
+  CancelToken? cancelToken,
 }) async {
   final params = <String, dynamic>{
     'q': query.trim(),
@@ -134,7 +138,11 @@ Future<PageResult<RepoOwner>> searchUsersAPI({
   }
 
   final raw = asMap(
-    await dioRequest.get(HttpConstants.searchUsers, params: params),
+    await dioRequest.get(
+      HttpConstants.searchUsers,
+      params: params,
+      cancelToken: cancelToken,
+    ),
   );
   final totalCount = asInt(raw['total_count']);
   final items = asList(raw['items'], RepoOwner.fromJson);

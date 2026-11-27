@@ -42,6 +42,7 @@ class _RepoCommitsPageState extends State<RepoCommitsPage> {
           widget.repoName,
           branch: widget.branch,
           page: page,
+          cancelToken: _list.cancelToken,
         ),
         firstPageErrorFallback: '加载提交历史失败',
         onLoadMoreError: (msg) {

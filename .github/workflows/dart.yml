@@ -59,7 +59,7 @@ jobs:
         run: flutter test --coverage
 
       - name: Check coverage threshold
-        # 本地实测基线（Flutter 3.47.9，90 个测试用例）：5998 / 6881 行 = 87.2%
+        # 本地实测基线（Flutter 3.47.9，92 个测试用例）：6028 / 6915 行 = 87.2%
         # 设定 80% 下限，避免后续改动导致核心逻辑失测
         run: |
           covered=$(awk -F'[:,]' '/^DA:/ && $3+0 > 0 { c++ } END { print c+0 }' coverage/lcov.info)

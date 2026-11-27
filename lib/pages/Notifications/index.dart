@@ -35,7 +35,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
   late final PagedListController<NotificationItem> _list =
       PagedListController<NotificationItem>(
         pageSize: GlobalConstants.defaultPageSize,
-        loader: (page) => getNotificationsAPI(all: _showAll, page: page),
+        loader: (page) => getNotificationsAPI(
+          all: _showAll,
+          page: page,
+          cancelToken: _list.cancelToken,
+        ),
         firstPageErrorFallback: '加载通知失败',
         onLoadMoreError: (msg) {
           if (mounted) ToastUtils.showToast(context, msg);

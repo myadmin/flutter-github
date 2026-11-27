@@ -37,8 +37,16 @@ class _UserFollowsPageState extends State<UserFollowsPage> {
       PagedListController<RepoOwner>(
         pageSize: GlobalConstants.defaultPageSize,
         loader: (page) => _tab == 'following'
-            ? getUserFollowingAPI(widget.login, page: page)
-            : getUserFollowersAPI(widget.login, page: page),
+            ? getUserFollowingAPI(
+                widget.login,
+                page: page,
+                cancelToken: _list.cancelToken,
+              )
+            : getUserFollowersAPI(
+                widget.login,
+                page: page,
+                cancelToken: _list.cancelToken,
+              ),
         firstPageErrorFallback: '加载用户列表失败',
         onLoadMoreError: (msg) {
           if (mounted) ToastUtils.showToast(context, msg);

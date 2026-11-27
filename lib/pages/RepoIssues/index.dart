@@ -52,6 +52,7 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
                   setState(() => _searchTotalCount = total);
                 }
               },
+              cancelToken: _list.cancelToken,
             );
           }
           return getRepoIssuesAPI(
@@ -59,6 +60,7 @@ class _RepoIssuesPageState extends State<RepoIssuesPage> {
             widget.repoName,
             state: _state,
             page: page,
+            cancelToken: _list.cancelToken,
           );
         },
         firstPageErrorFallback: '加载 Issues 失败',
